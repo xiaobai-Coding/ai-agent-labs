@@ -1,7 +1,4 @@
 
-
----
-```markdown
 # 🤖 AI Agent Labs  
 > xiaoBaiCoding 的 AI 智能体实验室  
 > 基于 Prompt + Tools + LLM + Function Calling 的实战型工程仓库
