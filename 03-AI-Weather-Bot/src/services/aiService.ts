@@ -1,7 +1,8 @@
 // DeepSeek AI服务实现
 // 使用真实的DeepSeek API进行对话
 
-import { Message, FunctionDefinition } from "../types/chat";
+import { Message } from "../types/chat";
+import { FunctionDefinition } from "../../../tools/types";
 import {
   delay,
   simulateTyping,
@@ -12,12 +13,11 @@ import {
 } from "../utils/utils";
 import { tips } from "../utils/tips";
 import {
-  calculator,
   availableFunctions,
   calculatorFunction,
   unitConverterFunction,
   weatherToolFunction,
-} from "../utils/tools";
+} from "../../../tools";
 
 // 所有可用的函数定义
 export const functionDefinitions: FunctionDefinition[] = [

@@ -22,27 +22,8 @@ export interface ToolResponse {
   result: any;
 }
 
-// 函数定义类型
-export interface FunctionDefinition {
-  name: string;
-  description: string;
-  parameters: {
-    type: 'object';
-    properties: Record<string, {
-      type: string;
-      description: string;
-      enum?: string[];
-    }>;
-    required: string[];
-  };
-}
-
-// 计算器函数参数类型
-export interface CalculatorParams {
-  num1: number;
-  num2: number;
-  operation: 'add' | 'subtract' | 'multiply' | 'divide';
-}
+// 从公共工具库导入类型
+export type { FunctionDefinition, CalculatorParams } from "../../../tools/types";
 
 // 聊天上下文类型
 export interface ChatContext {
