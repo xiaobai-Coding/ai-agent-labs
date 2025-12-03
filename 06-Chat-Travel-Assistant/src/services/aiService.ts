@@ -16,13 +16,15 @@ import {
   calculatorFunction,
   unitConverterFunction,
   weatherToolFunction,
+  travelAdviceFunction
 } from "../../../tools";
 
 // 所有可用的函数定义
 export const functionDefinitions: FunctionDefinition[] = [
   calculatorFunction,
   unitConverterFunction,
-  weatherToolFunction
+  weatherToolFunction,
+  travelAdviceFunction
 ];
 // 从环境变量中读取配置
 const getConfig = () => ({
@@ -87,9 +89,6 @@ const callDeepSeekAPI = async (
       },
       body: JSON.stringify(requestBody)
     });
-    console.log("fetch请求参数:", requestBody);
-
-    console.log("[AI Service] 收到响应，状态码:", response.status);
 
     // 检查响应状态
     if (!response.ok) {
@@ -244,7 +243,7 @@ const streamDeepSeekAPI = async (
       try {
         const parsed = JSON.parse(dataPayload);
         const delta = parsed.choices?.[0]?.delta;
-        console.log("delta:", delta);
+        // console.log("delta:", delta);
         if (!delta) continue;
 
         // 1️⃣ content：是 JSON 字符串的碎片
@@ -443,8 +442,8 @@ export const handleToolResponse = async (
       const functionName = functionCall.name;
       const functionArgs = JSON.parse(functionCall.arguments || "{}");
 
-      console.log(`[AI Service] 执行工具: ${functionName}`, functionArgs);
-      console.log("[AI Service] 执行工具参数:", functionArgs);
+      console.log(`${toolCall.name}： [AI Service] 执行工具: ${functionName}`, functionArgs);
+      console.log(`${toolCall.name}： [AI Service] 执行工具参数:`, functionArgs);
       // 1. 执行工具
       if (availableFunctions[functionName]) {
         const functionToCall = availableFunctions[functionName];
@@ -456,9 +455,9 @@ export const handleToolResponse = async (
             name: functionName,
             content: JSON.stringify(result)
           });
-          console.log("工具调用结果:", result);
+          console.log(`${functionCall.name}： [AI Service] 工具执行结果:`, result);
         } catch (error) {
-          console.error(`[AI Service] 执行工具失败: ${error}`);
+          console.error(`${functionCall.name}： [AI Service] 执行工具失败: ${error}`);
           // 执行工具失败
           toolResults.push({
             tool_call_id: toolCall.id,
@@ -472,7 +471,6 @@ export const handleToolResponse = async (
 
     // 构建包含工具调用和结果的完整消息历史
     // 注意：userMessages 不应该包含 system message，因为 callDeepSeekAPI 会在内部添加
-    console.log("工具调用userMessages：", userMessages);
     const messagesWithToolResults = [
       ...userMessages,
       {
@@ -483,7 +481,6 @@ export const handleToolResponse = async (
       ...toolResults
     ];
 
-    console.log("[AI Service] 准备发送第二次API请求，包含工具结果");
     // 2. 第二次发送请求，带上工具函数调用结果，获取模型最终回复
     if (stream) {
       const streamResult = await streamDeepSeekAPI(
@@ -491,7 +488,7 @@ export const handleToolResponse = async (
         showDebugReasoning,
         onPartialResponse
       );
-      console.log("[AI Service] 第二次API请求返回结果:", streamResult);
+      console.log(`[AI Service] 工具调用API请求返回结果:`, streamResult);
       return {
         message: streamResult.message,
         content: streamResult.content,
@@ -608,7 +605,7 @@ const getAIResponseWithStreaming = async (
       content: streamResult.content || null,
       tool_calls: streamResult.tool_calls
     };
-    // 如果模型触发了工具调用，执行工具后再流式返回最终结果，支持工具反制约
+    // 如果模型触发了工具调用，执行工具后再流式返回最终结果，支持工具反制
     return resolveToolCalls(
       userMessages,
       assistantMessage,

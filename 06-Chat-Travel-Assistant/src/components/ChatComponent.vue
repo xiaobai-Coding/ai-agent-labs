@@ -51,7 +51,7 @@ const debugFieldLine = showReasoning.value
   : `"debug_reasoning": null`;
 // 系统提示词
 const SYSTEM_PROMPT = `
-你是一个数字助理。能解答数字相关问题。当用户提出数字处理相关的问题时，你能调用数字工具来解决问题。
+你是一个智能出行助手。能解答出行相关问题。当用户提出出行相关的问题时，你能调用出行工具来解决问题。
 【任务规划规则（非常重要）】
 1. 收到用户需求后，你必须先在内部完成任务规划（不要直接告诉用户这一步）。
 2. 任务规划包含：
@@ -60,24 +60,17 @@ const SYSTEM_PROMPT = `
    - 如果需要工具，列出需要使用的工具、调用顺序和每一步的目的
 3. 只有在规划完成之后，才能开始真正的工具调用或直接回答。
 4. 对于包含多个子任务的问题，你必须明确拆分为多个步骤依次完成。
-【重要】工具调用规则
-1.当用户询问数字处理相关的问题时，你必须调用数字工具。
- 1.1 如果是数学运算相关的问题，你必须调用calculator工具。
- 1.2 如果是单位转换的问题，你必须调用unitConverter工具。
-2. 当用户询问穿衣、天气、气温、温度、冷不冷、热不热等问题时：
-你必须调用 weatherTool。
-weatherTool 返回伪造天气数据：
-{
-  temperature: number,
-  description: string,
-  suggestion: string
-}
-  
-规则：
-- 第一次模型调用 → 触发工具调用
-- 工具返回结果后 → 模型根据工具返回结果给出回答
-- 最终必须输出自然语言（不用 JSON）
-- 禁止胡编乱造天气（伪数据只来自 tool）
+【工具调用规则】
+1. 用户询问天气 → 调用 weatherTool
+2. 用户询问穿衣/出行建议 → 必须同时调用：
+    - weatherTool → 获取当前天气
+    - travelAdviceTool → 根据天气给建议
+3. 工具调用应根据结果反复尝试直到成功
+4. 若工具调用链完成后仍有数据缺失，请补问用户
+【输出格式规则】
+1. 所有工具链执行完毕后
+2. 必须输出自然语言建议（不可输出 JSON）
+3. 语言风格：轻松、生活化、关心用户。
 【最终输出格式要求（非常重要）】：
 1. 无论是否调用了工具，你对“用户可见的最终回复”必须是一个 JSON 字符串，对应如下结构：
    {
@@ -230,7 +223,7 @@ const focusInput = () => {
 const adjustTextareaHeight = () => {
   const textarea = inputRef.value;
   if (!textarea) return;
-  
+
   // 重置高度以获取正确的 scrollHeight
   textarea.style.height = 'auto';
   // 设置新高度，但不超过最大高度
@@ -319,10 +312,10 @@ sendMessage = async () => {
     const aiResponse = await getAIResponse(
       historyMessages,
       (chunk) => {
-        
+
         updateMessage(aiMessageId, (prev) => prev + chunk);
         // 滚动条实时滚动到最新消息
-        if(chunk){
+        if (chunk) {
           nextTick(scrollToBottom);
         }
       },
@@ -336,7 +329,7 @@ sendMessage = async () => {
       aiResponse.debug_reasoning ?? null
     );
 
-  } catch (error:any) {
+  } catch (error: any) {
     removeMessage(aiMessageId)
     // updateMessage(aiMessageId, '抱歉，我无法回答')
     tips.error(error);
@@ -360,10 +353,10 @@ const retryLastMessage = async (): Promise<void> => {
   if (isRetrying.value || now - lastRetryTime < RETRY_DEBOUNCE) {
     return;
   }
-  
+
   lastRetryTime = now;
   isRetrying.value = true;
-  
+
   try {
     // 获取最后一条用户消息
     const lastUserMessage = [...messages.value].reverse().find(msg => msg.sender === 'user');
@@ -516,16 +509,8 @@ onUnmounted(() => {
 
     <!-- 输入区域 -->
     <div class="input-container">
-      <textarea 
-        ref="inputRef" 
-        v-model="userInput" 
-        @input="adjustTextareaHeight"
-        @keypress="handleKeyPress" 
-        placeholder="输入你的问题..."
-        :disabled="isTyping" 
-        class="chat-input"
-        rows="1"
-      ></textarea>
+      <textarea ref="inputRef" v-model="userInput" @input="adjustTextareaHeight" @keypress="handleKeyPress"
+        placeholder="输入你的问题..." :disabled="isTyping" class="chat-input" rows="1"></textarea>
       <button @click="sendMessage" :disabled="!userInput.trim() || isTyping" class="send-button">
         {{ isTyping ? '发送中...' : '发送' }}
       </button>

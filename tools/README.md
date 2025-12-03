@@ -94,6 +94,12 @@ export interface Message {
 - **定义**: `weatherToolFunction: FunctionDefinition`
 - **功能**: 天气查询（当前为 mock 数据）
 
+### 4. Travel Advice Tool（出行建议）
+
+- **函数**: `travelAdviceTool(params: TravelAdviceParams): TravelAdviceResult`
+- **定义**: `travelAdviceFunction: FunctionDefinition`
+- **功能**: 根据温度与天气描述生成 Mock 出行建议（摘要、穿衣建议、携带清单）
+
 ## 🔧 添加新工具
 
 1. 在 `tools/` 目录下创建新文件，例如 `newTool.ts`
