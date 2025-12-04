@@ -128,6 +128,105 @@ npm run preview
 
 ---
 
+## 🚀 部署到 Vercel
+
+### 方式一：通过 Vercel CLI（推荐）
+
+1. **安装 Vercel CLI**
+```bash
+npm i -g vercel
+```
+
+2. **登录 Vercel**
+```bash
+vercel login
+```
+
+3. **在项目目录下部署**
+```bash
+cd 06-Chat-Travel-Assistant
+vercel
+```
+
+4. **配置环境变量**
+```bash
+vercel env add VITE_AI_API_KEY
+vercel env add VITE_AI_API_BASE_URL
+vercel env add VITE_APP_TITLE
+vercel env add VITE_APP_DEBUG
+```
+
+或者通过 Vercel 控制台添加环境变量：
+- 进入项目设置 → Environment Variables
+- 添加以下环境变量：
+  - `VITE_AI_API_KEY`: 你的 DeepSeek API Key
+  - `VITE_AI_API_BASE_URL`: `https://api.deepseek.com`
+  - `VITE_APP_TITLE`: `个人旅行助手`（可选）
+  - `VITE_APP_DEBUG`: `false`（可选）
+
+5. **重新部署**
+```bash
+vercel --prod
+```
+
+### 方式二：通过 GitHub 集成（推荐）
+
+1. **推送代码到 GitHub**
+```bash
+git add .
+git commit -m "准备部署到 Vercel"
+git push origin main
+```
+
+2. **在 Vercel 中导入项目**
+   - 访问 [Vercel Dashboard](https://vercel.com/dashboard)
+   - 点击 "Add New Project"
+   - 选择你的 GitHub 仓库
+   - 选择 `06-Chat-Travel-Assistant` 目录作为根目录
+
+3. **配置项目**
+   - Framework Preset: **Vite**
+   - Build Command: `npm run build`（自动检测）
+   - Output Directory: `dist`（自动检测）
+   - Install Command: `npm install`（自动检测）
+
+4. **添加环境变量**
+   - 在项目设置中添加环境变量（见方式一第4步）
+
+5. **部署**
+   - 点击 "Deploy"，Vercel 会自动构建和部署
+
+### 环境变量说明
+
+| 变量名 | 说明 | 必需 | 默认值 |
+|--------|------|------|--------|
+| `VITE_AI_API_KEY` | DeepSeek API Key | ✅ 是 | - |
+| `VITE_AI_API_BASE_URL` | API 基础 URL | ❌ 否 | `https://api.deepseek.com` |
+| `VITE_APP_TITLE` | 应用标题 | ❌ 否 | `DeepSeek AI聊天` |
+| `VITE_APP_DEBUG` | 调试模式 | ❌ 否 | `false` |
+
+> 📝 **注意**：环境变量必须以 `VITE_` 开头，Vite 才会在构建时将其注入到客户端代码中。
+
+### 部署后访问
+
+部署成功后，Vercel 会提供一个 URL，例如：
+```
+https://your-project-name.vercel.app
+```
+
+### 自定义域名
+
+1. 在 Vercel 项目设置中，进入 "Domains"
+2. 添加你的自定义域名
+3. 按照提示配置 DNS 记录
+
+### 持续部署
+
+- 每次推送到 GitHub 的 `main` 分支，Vercel 会自动重新部署
+- 可以通过 Vercel Dashboard 查看部署历史和日志
+
+---
+
 ## 🛠️ 技术栈
 
 - **前端框架**：Vue 3 (Composition API)

@@ -8,17 +8,20 @@ export * from './calculator';
 export * from './unitConverter';
 export * from './weather';
 export * from './travelAdviceTool';
+export * from './todoPlannerTool';
 
 // 工具函数映射（用于 aiService.ts 中的 availableFunctions）
 import { calculator } from './calculator';
 import { unitConverter } from './unitConverter';
 import { weatherTool } from './weather';
 import { travelAdviceTool } from './travelAdviceTool';
+import { todoPlannerTool } from './todoPlannerTool';
 
 export const availableFunctions: Record<string, (params: any) => any> = {
   calculator,
   unitConverter,
   weatherTool,
-  travelAdviceTool
+  travelAdviceTool,
+  todoPlannerTool
 };
 

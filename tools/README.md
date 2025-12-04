@@ -14,6 +14,8 @@ tools/
 ├── calculator.ts      # 计算器工具
 ├── unitConverter.ts   # 单位转换工具
 ├── weather.ts         # 天气查询工具
+├── travelAdviceTool.ts# 出行建议
+├── todoPlannerTool.ts # 任务规划拆解
 ├── index.ts           # 统一导出入口
 └── README.md          # 本文件
 ```
@@ -31,10 +33,17 @@ import {
   unitConverterFunction,
   weatherTool,
   weatherToolFunction,
+  travelAdviceTool,
+  travelAdviceFunction,
+  todoPlannerTool,
+  todoPlannerFunction,
   availableFunctions,
   FunctionDefinition,
   CalculatorParams,
-  UnitConverterParams
+  UnitConverterParams,
+  WeatherToolParams,
+  TravelAdviceParams,
+  TodoPlannerParams
 } from "../../../tools";
 
 // 或者按需导入
@@ -52,13 +61,17 @@ import {
   calculatorFunction,
   unitConverterFunction,
   weatherToolFunction,
+  travelAdviceFunction,
+  todoPlannerFunction,
 } from "../../../tools";
 
 // 所有可用的函数定义
 export const functionDefinitions: FunctionDefinition[] = [
   calculatorFunction,
   unitConverterFunction,
-  weatherToolFunction
+  weatherToolFunction,
+  travelAdviceFunction,
+  todoPlannerFunction
 ];
 ```
 
@@ -66,7 +79,16 @@ export const functionDefinitions: FunctionDefinition[] = [
 
 ```typescript
 // 从公共工具库导入类型
-export type { FunctionDefinition, CalculatorParams, UnitConverterParams } from "../../../tools/types";
+export type {
+  FunctionDefinition,
+  CalculatorParams,
+  UnitConverterParams,
+  WeatherToolParams,
+  TravelAdviceParams,
+  TravelAdviceResult,
+  TodoPlannerParams,
+  TodoStep
+} from "../../../tools/types";
 
 // 项目特定的类型定义
 export interface Message {
@@ -100,6 +122,23 @@ export interface Message {
 - **定义**: `travelAdviceFunction: FunctionDefinition`
 - **功能**: 根据温度与天气描述生成 Mock 出行建议（摘要、穿衣建议、携带清单）
 
+### 5. Todo Planner Tool（任务拆解）
+
+- **函数**: `todoPlannerTool(params: TodoPlannerParams): { steps: TodoStep[] }`
+- **定义**: `todoPlannerFunction: FunctionDefinition`
+- **功能**: 将模型思考好的「多条子任务文本」解析成结构化的待办清单，为多步骤 Agent 提供可靠的任务规划结果
+- **返回示例**:
+
+```json
+{
+  "steps": [
+    { "id": 1, "title": "查询明天广州的天气信息", "status": "pending" },
+    { "id": 2, "title": "查询后天广州的天气信息", "status": "pending" },
+    { "id": 3, "title": "根据明天天气生成穿衣建议", "status": "pending" }
+  ]
+}
+```
+
 ## 🔧 添加新工具
 
 1. 在 `tools/` 目录下创建新文件，例如 `newTool.ts`
@@ -122,4 +161,5 @@ export interface Message {
 - [04-AI-Assistant-Mini](../04-AI-Assistant-Mini/)
 - [05-AI-Planning](../05-AI-Planning/)
 - [06-Chat-Travel-Assistant](../06-Chat-Travel-Assistant/)
+- [07-Agent-WorkFlow](../07-Agent-WorkFlow/)
 

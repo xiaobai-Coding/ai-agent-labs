@@ -32,18 +32,20 @@ ai-agent-labs/
 ├── tools/                    # 全局工具集合（所有 Demo 共用）
 │    ├── calculator.ts         # 计算器工具
 │    ├── unitConverter.ts     # 单位转换工具
-│    ├── weather.ts            # 天气查询工具
+│    ├── weather.ts           # 天气查询工具
 │    ├── travelAdviceTool.ts  # 出行建议工具
+│    ├── todoPlannerTool.ts   # 任务规划拆解工具
 │    ├── types.ts              # 公共类型定义
 │    ├── index.ts              # 统一导出入口
 │    └── README.md             # 工具库文档
 │
 ├── 01-Chat-Calculator-Bot/   # 计算器智能体
 ├── 02-Chat-UnitConverter/    # 单位转换智能体
-├── 03-AI-Weather-Bot/         # 天气查询智能体
-├── 04-AI-Assistant-Mini/      # 多功能集成助手
-├── 05-AI-Planning/            # 任务规划智能体
-└── 06-Chat-Travel-Assistant/ # 旅行助手（最新，功能最全）
+├── 03-AI-Weather-Bot/        # 天气查询智能体
+├── 04-AI-Assistant-Mini/     # 多功能集成助手
+├── 05-AI-Planning/           # 任务规划智能体
+├── 06-Chat-Travel-Assistant/ # 旅行助手（功能最全的场景 Demo）
+└── 07-Agent-WorkFlow/        # Agent 工作流编排 & 可视化（基于 todoPlannerTool）
 ```
 
 特点：
@@ -65,6 +67,7 @@ ai-agent-labs/
 | unitConverter | 单位换算工具（cm/m, kg/g, C/F） | `tools/unitConverter.ts` |
 | weatherTool | 天气查询工具（Mock 数据版） | `tools/weather.ts` |
 | travelAdviceTool | 出行建议工具（基于天气生成建议） | `tools/travelAdviceTool.ts` |
+| todoPlannerTool | 任务规划拆解工具（将模型思考好的多条子任务文本解析为结构化待办 steps） | `tools/todoPlannerTool.ts` |
 
 工具会自动被 Agent 调用，用于真实执行能力，而不是让模型"猜"。
 
@@ -99,7 +102,7 @@ ai-agent-labs/
 Prompt 决策 → 工具执行 → 模型处理结果输出  
 是 AI Agent 最核心的决策机制。
 
-### ✔ 6. 任务规划与执行可视化（06 项目独有）
+### ✔ 6. 任务规划与执行可视化（06 / 07 项目）
 - **任务规划步骤面板**：实时展示 AI 的思考链路
   - 解析需求 → 工具链路 → 生成答复
   - 流式动画效果，逐字显示
@@ -155,7 +158,7 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 
 ---
 
-### **6️⃣ Chat Travel Assistant（旅行助手）⭐ 最新推荐**
+### **6️⃣ Chat Travel Assistant（旅行助手）⭐ 场景最完整**
 
 **最完整的 AI Agent 实现，包含所有最新功能特性**
 
@@ -193,7 +196,26 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 
 📁 路径：`06-Chat-Travel-Assistant/`
 
-> 💡 **推荐从 01 开始，逐步学习到 06，体验完整的 AI Agent 开发进阶路线**
+---
+
+### **7️⃣ Agent WorkFlow（任务工作流智能体）⭐ 规划链路推荐**
+
+**专注“任务拆解 + 工具链执行” 的工作流级 Agent Demo，主打 todoPlannerTool 的使用方式**
+
+#### 核心功能
+- ✅ 使用 `todoPlannerTool` 将模型“内心规划”的任务列表解析为结构化 steps（id/title/status）
+- ✅ 将工具返回的 steps **直接渲染到「任务规划步骤」面板**，可视化完整工作流
+- ✅ 支持多工具协作（计算器 / 单位换算 / 天气 / 出行建议等）
+- ✅ 任务链执行状态可视化（pending / running / done）
+
+#### 主要看点
+- 🧩 如何把「工具返回值」自然融合进 UI（而不是只看日志）
+- 🧠 如何约束模型：先在思考里拆 task，再把结果交给工具处理
+- 🪜 适合作为以后接企业级流程编排 / DAG / Orchestrator 的基础 Demo
+
+📁 路径：`07-Agent-WorkFlow/`
+
+> 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流的最佳实践**
 
 ---
 
