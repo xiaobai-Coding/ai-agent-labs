@@ -1,8 +1,18 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue';
 import type { Message, FunctionCall, ToolResponse } from '../types/chat';
-import { getAIResponse, shouldAskFollowUp, getFollowUpSuggestion, config, type AIResponse } from '../services/aiService';
-import SSEDebugPanel from './SSEDebugPanel.vue';
+import {
+  getAIResponse,
+  shouldAskFollowUp,
+  getFollowUpSuggestion,
+  config,
+  type AIResponse,
+  type AIExecutionHooks,
+  type PlanningUpdatePayload,
+  type ToolEventPayload,
+  type PlanningStage,
+  type PlanningStatus
+} from '../services/aiService';
 import { tips } from "../utils/tips";
 
 // 使用环境变量中的应用标题
@@ -34,13 +44,276 @@ const showScrollToBottomButton = ref(false);
 
 // 控制是否显示推理内容（默认关闭）
 const showReasoning = ref(false);
+// 控制简洁模式（默认关闭，显示面板）
+const simpleMode = ref(false);
 
 // 计算是否显示创意模式标签
 const showCreativeModeTag = computed(() => {
-  // 从配置中获取temperature值（如果存在），否则使用默认值0.8
   const temperature = config?.temperature || 0.8;
   return temperature > 0.7;
 });
+
+type ToolLogStatus = ToolEventPayload["type"];
+
+const planningPanelOpen = ref(false);
+const toolPanelOpen = ref(false);
+const planningItems = ref<{ id: string; text: string; isTyping: boolean }[]>([]);
+const toolLogs = ref<{
+  id: string;
+  toolName: string;
+  status: ToolLogStatus;
+  args?: any;
+  result?: any;
+  error?: string;
+  startTime?: number;
+  duration?: number;
+}[]>([]);
+
+// 规划步骤列表容器引用
+const planningListRef = ref<HTMLElement | null>(null);
+// 工具日志列表容器引用
+const toolLogListRef = ref<HTMLElement | null>(null);
+
+const formatPayloadSnippet = (payload: any) => {
+  if (payload === undefined || payload === null) return "";
+  try {
+    const text =
+      typeof payload === "string" ? payload : JSON.stringify(payload);
+    return text.length > 80 ? `${text.slice(0, 80)}...` : text;
+  } catch {
+    return String(payload);
+  }
+};
+
+// 格式化耗时显示
+const formatDuration = (ms: number): string => {
+  if (ms < 1000) {
+    return `${ms}ms`;
+  } else if (ms < 60000) {
+    return `${(ms / 1000).toFixed(2)}s`;
+  } else {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = ((ms % 60000) / 1000).toFixed(2);
+    return `${minutes}m ${seconds}s`;
+  }
+};
+
+const stageLabelMap: Record<PlanningStage, string> = {
+  intent: "解析需求",
+  tool: "工具链路",
+  answer: "生成答复"
+};
+
+const stageIconMap: Record<PlanningStage, string> = {
+  intent: "🧠",
+  tool: "💡",
+  answer: "📝"
+};
+
+const stageStatusLabel: Record<PlanningStatus, string> = {
+  pending: "待开始",
+  running: "工作中…",
+  completed: "完成",
+  error: "异常"
+};
+
+const toolIconMap: Record<ToolLogStatus, string> = {
+  start: "⚙️",
+  success: "✅",
+  error: "⚠️"
+};
+
+const resetExecutionPanels = () => {
+  planningItems.value = [];
+  toolLogs.value = [];
+  // 默认折叠，不抢夺聊天区域焦点
+  planningPanelOpen.value = false;
+  toolPanelOpen.value = false;
+};
+
+// 滚动到规划步骤列表底部
+const scrollPlanningListToBottom = () => {
+  nextTick(() => {
+    if (planningListRef.value) {
+      planningListRef.value.scrollTo({
+        top: planningListRef.value.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  });
+};
+
+// 滚动到工具日志列表底部
+const scrollToolLogListToBottom = () => {
+  nextTick(() => {
+    if (toolLogListRef.value) {
+      toolLogListRef.value.scrollTo({
+        top: toolLogListRef.value.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  });
+};
+
+// 打字机效果函数
+const typeText = async (
+  text: string,
+  onChar: (char: string) => void,
+  speed: number = 30
+): Promise<void> => {
+  const chars = text.split("");
+  for (const char of chars) {
+    onChar(char);
+    // 每几个字符滚动一次，保持流畅
+    if (chars.indexOf(char) % 3 === 0) {
+      scrollPlanningListToBottom();
+    }
+    await new Promise((resolve) => setTimeout(resolve, speed + Math.random() * 20));
+  }
+  // 打字完成后确保滚动到底部
+  scrollPlanningListToBottom();
+};
+
+const updatePlanningStep = async (payload: PlanningUpdatePayload) => {
+  if (payload.status === "pending") return;
+
+  const icon = stageIconMap[payload.stage];
+  const stage = stageLabelMap[payload.stage];
+  const status = stageStatusLabel[payload.status];
+  const detail = payload.detail ? `：${payload.detail}` : "";
+  const fullText = `${icon} ${stage} · ${status}${detail}`;
+
+  // 创建新的规划项，标记为正在输入
+  const itemId = `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+  const newItem = {
+    id: itemId,
+    text: "",
+    isTyping: true
+  };
+
+  planningItems.value = [...planningItems.value, newItem];
+
+  // 有更新时自动展开一下，让用户知道有进展
+  if (!planningPanelOpen.value && planningItems.value.length > 0) {
+    planningPanelOpen.value = true;
+  }
+
+  // 等待面板展开动画完成后再滚动
+  await nextTick();
+  setTimeout(() => {
+    scrollPlanningListToBottom();
+  }, 100);
+
+  // 使用打字机效果逐字添加文本
+  await typeText(fullText, (char) => {
+    const item = planningItems.value.find(item => item.id === itemId);
+    if (item) {
+      item.text += char;
+    }
+  }, 25);
+
+  // 打字完成后，标记为完成
+  const finalItem = planningItems.value.find(item => item.id === itemId);
+  if (finalItem) {
+    finalItem.isTyping = false;
+  }
+
+  // 确保最终滚动到底部
+  scrollPlanningListToBottom();
+};
+
+const pushToolLogEntry = (event: ToolEventPayload) => {
+  const now = Date.now();
+  const logEntry: typeof toolLogs.value[0] = {
+    id: `${now}-${Math.random().toString(16).slice(2, 6)}`,
+    toolName: event.toolName,
+    status: event.type,
+    args: event.args,
+    result: event.result,
+    error: event.error
+  };
+  
+  // 如果是 start 事件，记录开始时间并添加到列表开头
+  if (event.type === "start") {
+    logEntry.startTime = now;
+    toolLogs.value = [logEntry, ...toolLogs.value].slice(0, 10);
+  } else {
+    // 找到对应的 start 记录并更新（查找最近的、同名的、状态为 start 的记录）
+    const index = toolLogs.value.findIndex(log => 
+      log.toolName === event.toolName && log.status === "start"
+    );
+    if (index !== -1) {
+      const startLog = toolLogs.value[index];
+      const duration = startLog.startTime ? now - startLog.startTime : undefined;
+      toolLogs.value[index] = { 
+        ...startLog, 
+        ...logEntry,
+        startTime: startLog.startTime,
+        duration
+      };
+    } else {
+      // 如果找不到对应的 start 记录，直接添加
+      toolLogs.value = [logEntry, ...toolLogs.value].slice(0, 10);
+    }
+  }
+  
+  // 有工具调用时自动展开一下
+  if (!toolPanelOpen.value && toolLogs.value.length > 0) {
+    toolPanelOpen.value = true;
+  }
+
+  // 滚动到工具日志列表底部
+  scrollToolLogListToBottom();
+};
+
+const startPlanningFlow = async () => {
+  resetExecutionPanels();
+  const itemId = `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+  const newItem = {
+    id: itemId,
+    text: "",
+    isTyping: true
+  };
+  planningItems.value.push(newItem);
+
+  // 等待面板展开后再滚动
+  await nextTick();
+  setTimeout(() => {
+    scrollPlanningListToBottom();
+  }, 100);
+
+  // 使用打字机效果显示初始提示
+  await typeText("🧠 工作中…", (char) => {
+    const item = planningItems.value.find(item => item.id === itemId);
+    if (item) {
+      item.text += char;
+    }
+  }, 30);
+
+  // 打字完成后，标记为完成
+  const finalItem = planningItems.value.find(item => item.id === itemId);
+  if (finalItem) {
+    finalItem.isTyping = false;
+  }
+
+  // 确保最终滚动到底部
+  scrollPlanningListToBottom();
+};
+
+const IDENTITY_RESPONSE =
+  "您好，我是由default模型提供支持，作为Cursor IDE的核心功能之一，可协助完成各类开发任务，只要是编程相关的问题，都可以问我！你现在有什么想做的吗？";
+
+const identityPatterns = [
+  /什么模型/,
+  /哪个模型/,
+  /你是什么模型/,
+  /你是谁/,
+  /model/i,
+  /是谁/i
+];
+
+const isIdentityQuestion = (text: string) =>
+  identityPatterns.some((pattern) => pattern.test(text));
 
 // 模板中使用的方法 - 提前声明类型
 let clearChat: () => void;
@@ -265,6 +538,13 @@ sendMessage = async () => {
   addMessage(trimmedInput, "user");
   userInput.value = "";
 
+  if (isIdentityQuestion(trimmedInput)) {
+    addMessage(IDENTITY_RESPONSE, "ai");
+    focusInput();
+    return;
+  }
+
+  startPlanningFlow();
   isTyping.value = true;
 
   // 创建 AI 占位符消息（content 为空）
@@ -309,6 +589,15 @@ sendMessage = async () => {
     });
 
     // 调用 AI （流式）
+    const aiHooks: AIExecutionHooks = {
+      onPlanningUpdate: (payload) => {
+        updatePlanningStep(payload);
+      },
+      onToolEvent: (event) => {
+        pushToolLogEntry(event);
+      }
+    };
+
     const aiResponse = await getAIResponse(
       historyMessages,
       (chunk) => {
@@ -319,7 +608,8 @@ sendMessage = async () => {
           nextTick(scrollToBottom);
         }
       },
-      showReasoning.value
+      showReasoning.value,
+      aiHooks
     );
 
     // 流式结束后：覆盖成最终 JSON result
@@ -377,6 +667,7 @@ const retryLastMessage = async (): Promise<void> => {
     tempAIResponse.value = '';
     hasError.value = false;
     currentError = null;
+    startPlanningFlow();
 
     if (debug) {
       console.log(`[Chat] 开始重试发送消息 (${trimmedInput.length} 字符)`);
@@ -391,11 +682,22 @@ const retryLastMessage = async (): Promise<void> => {
       }));
 
     // 调用AI API获取回复
+    const aiHooks: AIExecutionHooks = {
+      onPlanningUpdate: (payload) => {
+        updatePlanningStep(payload);
+      },
+      onToolEvent: (event) => {
+        pushToolLogEntry(event);
+      }
+    };
+
     await getAIResponse(
       [...historyMessages, { content: trimmedInput, role: 'user' as const }],
       (char) => {
         tempAIResponse.value += char;
-      }
+      },
+      showReasoning.value,
+      aiHooks
     );
 
     // 添加完整的AI回复
@@ -443,11 +745,59 @@ onMounted(() => {
   focusInput();
 });
 
-// 组件卸载前移除事件监听器
+// 实时更新运行中工具的耗时
+let durationUpdateTimer: number | null = null;
+const currentTime = ref(Date.now());
+
+const startDurationUpdate = () => {
+  if (durationUpdateTimer) return; // 如果已经在运行，不重复启动
+  
+  durationUpdateTimer = window.setInterval(() => {
+    const hasRunningTools = toolLogs.value.some(log => log.status === 'start' && log.startTime);
+    if (!hasRunningTools) {
+      // 如果没有运行中的工具，停止定时器
+      if (durationUpdateTimer) {
+        clearInterval(durationUpdateTimer);
+        durationUpdateTimer = null;
+      }
+      return;
+    }
+    // 更新当前时间，触发响应式更新
+    currentTime.value = Date.now();
+  }, 100); // 每 100ms 更新一次
+};
+
+// 监听工具日志变化，如果有运行中的工具则启动定时器
+watch(() => toolLogs.value.length, () => {
+  const hasRunningTools = toolLogs.value.some(log => log.status === 'start' && log.startTime);
+  if (hasRunningTools && !durationUpdateTimer) {
+    startDurationUpdate();
+  } else if (!hasRunningTools && durationUpdateTimer) {
+    clearInterval(durationUpdateTimer);
+    durationUpdateTimer = null;
+  }
+}, { immediate: true });
+
+// 监听工具状态变化
+watch(() => toolLogs.value.map(log => log.status), () => {
+  const hasRunningTools = toolLogs.value.some(log => log.status === 'start' && log.startTime);
+  if (hasRunningTools && !durationUpdateTimer) {
+    startDurationUpdate();
+  } else if (!hasRunningTools && durationUpdateTimer) {
+    clearInterval(durationUpdateTimer);
+    durationUpdateTimer = null;
+  }
+});
+
+// 组件卸载前移除事件监听器和定时器
 onUnmounted(() => {
   const chatContainer = document.getElementById('chat-container');
   if (chatContainer) {
     chatContainer.removeEventListener('scroll', handleScroll);
+  }
+  if (durationUpdateTimer) {
+    clearInterval(durationUpdateTimer);
+    durationUpdateTimer = null;
   }
 })
 </script>
@@ -461,6 +811,12 @@ onUnmounted(() => {
       <div v-if="showCreativeModeTag" class="creative-mode-tag">
         创意模式（输出更发散）
       </div>
+      <!-- 简洁模式开关 -->
+      <label class="reasoning-toggle">
+        <span class="toggle-label">简洁模式</span>
+        <input type="checkbox" v-model="simpleMode" class="toggle-checkbox">
+        <span class="toggle-slider"></span>
+      </label>
       <!-- 显示推理开关 -->
       <label class="reasoning-toggle">
         <span class="toggle-label">显示推理过程</span>
@@ -468,6 +824,73 @@ onUnmounted(() => {
         <span class="toggle-slider"></span>
       </label>
       <button class="clear-button" @click="clearChat">清空聊天</button>
+    </div>
+
+    <!-- AI 工作流展示 -->
+    <div v-if="!simpleMode" class="ai-status-panel">
+      <div class="status-card">
+        <div class="status-header" @click="planningPanelOpen = !planningPanelOpen">
+          <div>
+            <div class="status-title">🧠 任务规划步骤</div>
+            <div class="status-subtitle">AI 在努力拆解你的需求</div>
+          </div>
+          <button class="collapse-btn">{{ planningPanelOpen ? '收起' : '展开' }}</button>
+        </div>
+        <transition name="collapse">
+          <ol v-show="planningPanelOpen" ref="planningListRef" class="status-list">
+            <li v-for="(item, index) in planningItems" :key="item.id" class="planning-item">
+              <span class="planning-number">{{ index + 1 }}</span>
+              <span class="planning-text">
+                {{ item.text }}
+                <span v-if="item.isTyping" class="typing-cursor">|</span>
+              </span>
+            </li>
+            <li v-if="!planningItems.length" class="status-empty">暂无计划，提问一个任务试试吧。</li>
+          </ol>
+        </transition>
+      </div>
+
+      <div class="status-card">
+        <div class="status-header" @click="toolPanelOpen = !toolPanelOpen">
+          <div>
+            <div class="status-title">🔧 工具执行日志</div>
+            <div class="status-subtitle">实时记录每一次调用</div>
+          </div>
+          <button class="collapse-btn">{{ toolPanelOpen ? '收起' : '展开' }}</button>
+        </div>
+        <transition name="collapse">
+          <div v-show="toolPanelOpen" ref="toolLogListRef" class="status-list">
+            <div v-for="(log, index) in toolLogs" :key="log.id" :class="['tool-log-item', `tool-log-${log.status}`]">
+              <div class="tool-log-header">
+                <span class="tool-log-number">{{ index + 1 }}</span>
+                <span class="tool-log-icon">{{ toolIconMap[log.status] }}</span>
+                <span class="tool-log-name">调用 {{ log.toolName || '工具' }}</span>
+                <span :class="['tool-log-status', `status-${log.status}`]">
+                  {{ log.status === 'start' ? '运行中' : log.status === 'success' ? '完成' : '失败' }}
+                </span>
+                <span v-if="log.duration !== undefined || (log.status === 'start' && log.startTime)" class="tool-log-duration">
+                  {{ formatDuration(log.duration !== undefined ? log.duration : currentTime - (log.startTime || 0)) }}
+                </span>
+              </div>
+              <div v-if="log.args || log.result || log.error" class="tool-log-detail">
+                <div v-if="log.args" class="tool-log-arg">
+                  <span class="detail-label">参数：</span>
+                  <code class="detail-value">{{ formatPayloadSnippet(log.args) }}</code>
+                </div>
+                <div v-if="log.result" class="tool-log-result">
+                  <span class="detail-label">结果：</span>
+                  <code class="detail-value">{{ formatPayloadSnippet(log.result) }}</code>
+                </div>
+                <div v-if="log.error" class="tool-log-error">
+                  <span class="detail-label">错误：</span>
+                  <span class="detail-value error-text">{{ log.error }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="!toolLogs.length" class="status-empty">还没有工具被使用。</div>
+          </div>
+        </transition>
+      </div>
     </div>
 
     <!-- 聊天消息区域 -->
@@ -558,6 +981,317 @@ onUnmounted(() => {
   font-weight: 600;
   letter-spacing: 0.5px;
 }
+
+.ai-status-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.status-card {
+  flex: 1;
+  min-width: 200px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.status-title {
+  font-weight: 500;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.status-subtitle {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.collapse-btn {
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  color: #6b7280;
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.collapse-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.status-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 12px;
+  color: #6b7280;
+  max-height: 150px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.status-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.status-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.status-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+.status-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.status-empty {
+  font-size: 11px;
+  color: #d1d5db;
+  font-style: italic;
+  padding: 0.5rem;
+  text-align: center;
+}
+
+/* 任务规划步骤样式 */
+.planning-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  margin: 0.2rem 0;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 6px;
+  border-left: 2px solid rgba(102, 126, 234, 0.3);
+  transition: all 0.2s ease;
+}
+
+.planning-item:hover {
+  background: rgba(102, 126, 234, 0.08);
+  border-left-color: rgba(102, 126, 234, 0.5);
+}
+
+.planning-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.planning-text {
+  flex: 1;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: #667eea;
+  margin-left: 2px;
+  animation: blink 1s infinite;
+  vertical-align: baseline;
+}
+
+@keyframes blink {
+
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 工具执行日志样式 */
+.tool-log-item {
+  padding: 0.5rem;
+  margin: 0.3rem 0;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.tool-log-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.tool-log-item.tool-log-start {
+  border-left: 3px solid #3b82f6;
+}
+
+.tool-log-item.tool-log-success {
+  border-left: 3px solid #10b981;
+}
+
+.tool-log-item.tool-log-error {
+  border-left: 3px solid #ef4444;
+}
+
+.tool-log-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.tool-log-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  background: #6b7280;
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.tool-log-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tool-log-name {
+  font-weight: 500;
+  color: #374151;
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.tool-log-status {
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.tool-log-status.status-start {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.tool-log-status.status-success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.tool-log-status.status-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.tool-log-duration {
+  font-size: 10px;
+  color: #9ca3af;
+  font-weight: 400;
+  padding: 0.1rem 0.4rem;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  flex-shrink: 0;
+}
+
+.tool-log-detail {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.tool-log-arg,
+.tool-log-result,
+.tool-log-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.detail-label {
+  color: #6b7280;
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 40px;
+}
+
+.detail-value {
+  flex: 1;
+  color: #374151;
+  word-break: break-word;
+  background: rgba(0, 0, 0, 0.03);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 10px;
+}
+
+.detail-value.error-text {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: max-height 0.25s ease, opacity 0.25s ease;
+}
+
+.collapse-enter-from,
+.collapse-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+.collapse-enter-to,
+.collapse-leave-from {
+  max-height: 150px;
+  opacity: 1;
+}
+
 
 .clear-button {
   background-color: rgba(255, 255, 255, 0.2);

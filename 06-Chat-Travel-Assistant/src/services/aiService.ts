@@ -39,6 +39,29 @@ const getConfig = () => ({
 
 const config = getConfig();
 
+// 任务规划阶段类型
+export type PlanningStage = "intent" | "tool" | "answer";
+export type PlanningStatus = "pending" | "running" | "completed" | "error";
+
+export interface PlanningUpdatePayload {
+  stage: PlanningStage;
+  status: PlanningStatus;
+  detail?: string;
+}
+
+export interface ToolEventPayload {
+  type: "start" | "success" | "error";
+  toolName: string;
+  args?: Record<string, any>;
+  result?: any;
+  error?: string;
+}
+
+export interface AIExecutionHooks {
+  onPlanningUpdate?: (payload: PlanningUpdatePayload) => void;
+  onToolEvent?: (payload: ToolEventPayload) => void;
+}
+
 // 定义解析模型返回内容的接口
 interface ParsedModelContent {
   content: string;
@@ -418,6 +441,7 @@ interface HandleToolResponseOptions {
   showDebugReasoning?: boolean;
   stream?: boolean;
   onPartialResponse?: (partial: string) => void;
+  hooks?: AIExecutionHooks;
 }
 
 // 处理工具调用响应，执行工具并将结果发送回模型生成最终回复
@@ -430,11 +454,17 @@ export const handleToolResponse = async (
   const {
     showDebugReasoning = false,
     stream = false,
-    onPartialResponse
+    onPartialResponse,
+    hooks
   } = options;
   console.log(`[AI Service] 处理工具调用，工具数量: ${toolCalls.length}`);
 
   try {
+    hooks?.onPlanningUpdate?.({
+      stage: "tool",
+      status: "running",
+      detail: `即将执行 ${toolCalls.length} 个工具`
+    });
     // 执行所有工具调用
     const toolResults = [];
     for (const toolCall of toolCalls) {
@@ -444,11 +474,22 @@ export const handleToolResponse = async (
 
       console.log(`${toolCall.name}： [AI Service] 执行工具: ${functionName}`, functionArgs);
       console.log(`${toolCall.name}： [AI Service] 执行工具参数:`, functionArgs);
+      hooks?.onToolEvent?.({
+        type: "start",
+        toolName: functionName,
+        args: functionArgs
+      });
       // 1. 执行工具
       if (availableFunctions[functionName]) {
         const functionToCall = availableFunctions[functionName];
         try {
           const result = functionToCall(functionArgs);
+          hooks?.onToolEvent?.({
+            type: "success",
+            toolName: functionName,
+            args: functionArgs,
+            result
+          });
           toolResults.push({
             tool_call_id: toolCall.id,
             role: "tool",
@@ -458,6 +499,17 @@ export const handleToolResponse = async (
           console.log(`${functionCall.name}： [AI Service] 工具执行结果:`, result);
         } catch (error) {
           console.error(`${functionCall.name}： [AI Service] 执行工具失败: ${error}`);
+          hooks?.onToolEvent?.({
+            type: "error",
+            toolName: functionName,
+            args: functionArgs,
+            error: String(error)
+          });
+          hooks?.onPlanningUpdate?.({
+            stage: "tool",
+            status: "error",
+            detail: `工具 ${functionName} 执行失败`
+          });
           // 执行工具失败
           toolResults.push({
             tool_call_id: toolCall.id,
@@ -481,6 +533,11 @@ export const handleToolResponse = async (
       ...toolResults
     ];
 
+    hooks?.onPlanningUpdate?.({
+      stage: "tool",
+      status: "completed",
+      detail: "所有工具调用完成，准备生成回答"
+    });
     // 2. 第二次发送请求，带上工具函数调用结果，获取模型最终回复
     if (stream) {
       const streamResult = await streamDeepSeekAPI(
@@ -506,10 +563,16 @@ export const handleToolResponse = async (
 const getAIResponseFallback = async (
   userMessages: any[],
   onPartialResponse: (partialResponse: string) => void,
-  showDebugReasoning: boolean
+  showDebugReasoning: boolean,
+  hooks?: AIExecutionHooks
 ): Promise<AIResponse> => {
   // 调用API获取响应
   const data = await callDeepSeekAPI(userMessages, showDebugReasoning);
+  hooks?.onPlanningUpdate?.({
+    stage: "intent",
+    status: "completed",
+    detail: "完成需求理解"
+  });
 
   if (
     data.choices &&
@@ -519,20 +582,39 @@ const getAIResponseFallback = async (
     const toolCalls = data.choices[0].message.tool_calls;
     const assistantMessage = data.choices[0].message;
 
+    hooks?.onPlanningUpdate?.({
+      stage: "tool",
+      status: "running",
+      detail: "检测到模型需要调用工具"
+    });
     const finalResponse = await handleToolResponse(
       userMessages,
       assistantMessage,
       toolCalls,
       {
-        showDebugReasoning
+        showDebugReasoning,
+        hooks
       }
     );
+    hooks?.onPlanningUpdate?.({
+      stage: "tool",
+      status: "completed"
+    });
+    hooks?.onPlanningUpdate?.({
+      stage: "answer",
+      status: "running",
+      detail: "整合工具结果"
+    });
 
     await delay(500);
     await simulateTyping(finalResponse.content, (char) => {
       onPartialResponse(char);
     });
 
+    hooks?.onPlanningUpdate?.({
+      stage: "answer",
+      status: "completed"
+    });
     return finalResponse;
   }
 
@@ -545,6 +627,14 @@ const getAIResponseFallback = async (
       onPartialResponse(char);
     });
 
+    hooks?.onPlanningUpdate?.({
+      stage: "answer",
+      status: "running"
+    });
+    hooks?.onPlanningUpdate?.({
+      stage: "answer",
+      status: "completed"
+    });
     return parsed;
   }
 
@@ -590,7 +680,8 @@ export const resolveToolCalls = async (
 const getAIResponseWithStreaming = async (
   userMessages: any[],
   onPartialResponse: (partialResponse: string) => void,
-  showDebugReasoning: boolean
+  showDebugReasoning: boolean,
+  hooks?: AIExecutionHooks
 ): Promise<AIResponse> => {
   const streamResult = await streamDeepSeekAPI(
     userMessages,
@@ -598,26 +689,62 @@ const getAIResponseWithStreaming = async (
     onPartialResponse
   );
   console.log("streamResult:", streamResult);
+  hooks?.onPlanningUpdate?.({
+    stage: "intent",
+    status: "completed",
+    detail: "完成需求理解"
+  });
   // 如果模型触发了工具调用，执行工具后再流式返回最终结果
   if (streamResult.tool_calls?.length) {
+    hooks?.onPlanningUpdate?.({
+      stage: "tool",
+      status: "running",
+      detail: "检测到模型需要调用工具"
+    });
     const assistantMessage = {
       role: "assistant",
       content: streamResult.content || null,
       tool_calls: streamResult.tool_calls
     };
     // 如果模型触发了工具调用，执行工具后再流式返回最终结果，支持工具反制
-    return resolveToolCalls(
+    const resolved = await resolveToolCalls(
       userMessages,
       assistantMessage,
       streamResult.tool_calls,
       {
         showDebugReasoning,
         stream: true,
-        onPartialResponse
+        onPartialResponse,
+        hooks
       }
     );
+    hooks?.onPlanningUpdate?.({
+      stage: "tool",
+      status: "completed",
+      detail: "工具链执行完成"
+    });
+    hooks?.onPlanningUpdate?.({
+      stage: "answer",
+      status: "running",
+      detail: "整合工具结果"
+    });
+    hooks?.onPlanningUpdate?.({
+      stage: "answer",
+      status: "completed",
+      detail: "回答生成完成"
+    });
+    return resolved;
   }
 
+  hooks?.onPlanningUpdate?.({
+    stage: "answer",
+    status: "running",
+    detail: "直接生成回答"
+  });
+  hooks?.onPlanningUpdate?.({
+    stage: "answer",
+    status: "completed"
+  });
   return {
     content: streamResult.content,
     debug_reasoning: streamResult.debug_reasoning
@@ -628,15 +755,30 @@ const getAIResponseWithStreaming = async (
 export const getAIResponse = async (
   userMessages: any[],
   onPartialResponse: (partialResponse: string) => void,
-  showDebugReasoning: boolean = false
+  showDebugReasoning: boolean = false,
+  hooks?: AIExecutionHooks
 ): Promise<AIResponse> => {
   console.log("[AI Service] getAIResponse被调用");
+  hooks?.onPlanningUpdate?.({
+    stage: "intent",
+    status: "running",
+    detail: "AI 正在分析你的问题"
+  });
+  hooks?.onPlanningUpdate?.({
+    stage: "tool",
+    status: "pending"
+  });
+  hooks?.onPlanningUpdate?.({
+    stage: "answer",
+    status: "pending"
+  });
 
   if (!supportsStreaming()) {
     return getAIResponseFallback(
       userMessages,
       onPartialResponse,
-      showDebugReasoning
+      showDebugReasoning,
+      hooks
     );
   }
 
@@ -644,14 +786,16 @@ export const getAIResponse = async (
     return await getAIResponseWithStreaming(
       userMessages,
       onPartialResponse,
-      showDebugReasoning
+      showDebugReasoning,
+      hooks
     );
   } catch (error) {
     console.warn("[AI Service] 流式输出失败，回退到打字机模式:", error);
     return getAIResponseFallback(
       userMessages,
       onPartialResponse,
-      showDebugReasoning
+      showDebugReasoning,
+      hooks
     );
   }
 };
