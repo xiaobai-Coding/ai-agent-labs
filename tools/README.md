@@ -16,6 +16,8 @@ tools/
 ├── weather.ts         # 天气查询工具
 ├── travelAdviceTool.ts# 出行建议
 ├── todoPlannerTool.ts # 任务规划拆解
+├── trafficTimeTool.ts # 交通时间估算
+├── packingListTool.ts# 物品清单生成
 ├── index.ts           # 统一导出入口
 └── README.md          # 本文件
 ```
@@ -37,13 +39,19 @@ import {
   travelAdviceFunction,
   todoPlannerTool,
   todoPlannerFunction,
+  trafficTimeTool,
+  trafficTimeFunction,
+  packingListTool,
+  packingListFunction,
   availableFunctions,
   FunctionDefinition,
   CalculatorParams,
   UnitConverterParams,
   WeatherToolParams,
   TravelAdviceParams,
-  TodoPlannerParams
+  TodoPlannerParams,
+  TrafficTimeParams,
+  PackingListParams
 } from "../../../tools";
 
 // 或者按需导入
@@ -63,6 +71,8 @@ import {
   weatherToolFunction,
   travelAdviceFunction,
   todoPlannerFunction,
+  trafficTimeFunction,
+  packingListFunction,
 } from "../../../tools";
 
 // 所有可用的函数定义
@@ -71,7 +81,9 @@ export const functionDefinitions: FunctionDefinition[] = [
   unitConverterFunction,
   weatherToolFunction,
   travelAdviceFunction,
-  todoPlannerFunction
+  todoPlannerFunction,
+  trafficTimeFunction,
+  packingListFunction
 ];
 ```
 
@@ -87,7 +99,11 @@ export type {
   TravelAdviceParams,
   TravelAdviceResult,
   TodoPlannerParams,
-  TodoStep
+  TodoStep,
+  TrafficTimeParams,
+  TrafficTimeResult,
+  PackingListParams,
+  PackingListResult
 } from "../../../tools/types";
 
 // 项目特定的类型定义
@@ -138,6 +154,72 @@ export interface Message {
   ]
 }
 ```
+
+### 6. Traffic Time Tool（交通时间估算）
+
+- **函数**: `trafficTimeTool(params: TrafficTimeParams): TrafficTimeResult`
+- **定义**: `trafficTimeFunction: FunctionDefinition`
+- **功能**: 根据目的地城市名称，估算从当前位置（默认北京）到目的地的里程和交通时间。支持多种交通方式（自驾、高铁、飞机、火车），返回预计时间、路况建议等信息
+- **参数**:
+  - `destination: string` - 目的地城市名称，例如："上海"、"广州"、"深圳"、"杭州"等
+- **返回示例**:
+
+```json
+{
+  "destination": "上海",
+  "distance": 1213,
+  "transportMode": "高铁",
+  "estimatedTime": 273,
+  "timeDisplay": "4小时33分钟",
+  "trafficCondition": "高铁班次较多，建议提前购票",
+  "suggestedDeparture": "建议选择上午或下午班次，避开早晚高峰",
+  "notes": null
+}
+```
+
+**特性**:
+- 🗺️ 内置常见城市距离映射表（以北京为起点）
+- 🚗 根据距离自动选择最优交通方式
+- ⏱️ 考虑不同交通方式的平均速度和额外时间（候机、候车等）
+- 📊 提供路况说明和建议出发时间
+- 🎯 未知城市自动生成合理的估算数据
+
+### 7. Packing List Tool（物品清单生成）
+
+- **函数**: `packingListTool(params: PackingListParams): PackingListResult`
+- **定义**: `packingListFunction: FunctionDefinition`
+- **功能**: 根据交通方式、温度和天气描述，生成详细的携带物品清单。清单包括必需品、衣物、电子设备、个人护理、天气相关物品和交通方式特定物品等分类
+- **参数**:
+  - `transportMode: "自驾" | "高铁" | "飞机" | "火车"` - 出行交通方式
+  - `temp: number` - 目的地温度，单位摄氏度
+  - `weather: string` - 目的地天气描述，如"晴天"、"小雨"、"多云"、"雪"等
+- **返回示例**:
+
+```json
+{
+  "transportMode": "高铁",
+  "temp": 15,
+  "weather": "小雨",
+  "categories": {
+    "essentials": ["身份证", "手机", "充电器", "钱包", "钥匙", "车票/电子车票"],
+    "clothing": ["薄外套", "长袖T恤", "长裤", "薄袜子", "运动鞋"],
+    "electronics": ["手机", "充电器", "充电宝", "耳机", "平板电脑/电子书（可选）"],
+    "personalCare": ["牙刷", "牙膏", "毛巾", "纸巾", "湿纸巾"],
+    "weatherItems": ["雨伞", "雨衣", "防水鞋套", "防水包"],
+    "transportSpecific": ["U型枕", "充电宝", "小零食", "水杯", "湿纸巾"]
+  },
+  "fullList": ["身份证", "手机", "充电器", "钱包", "钥匙", "车票/电子车票", "薄外套", "长袖T恤", "长裤", "薄袜子", "运动鞋", "充电宝", "耳机", "平板电脑/电子书（可选）", "牙刷", "牙膏", "毛巾", "纸巾", "湿纸巾", "雨伞", "雨衣", "防水鞋套", "防水包", "U型枕", "小零食", "水杯"],
+  "summary": "根据高铁出行、15°C、小雨的天气情况，共整理了 26 件物品。天气凉爽，准备薄外套。行李相对宽松，但注意不要携带违禁品。"
+}
+```
+
+**特性**:
+- 📦 **分类清单**：按必需品、衣物、电子设备、个人护理、天气相关、交通特定等分类
+- 🌡️ **温度适配**：根据温度范围（≤0°C、0-10°C、10-20°C、20-28°C、>28°C）生成相应衣物建议
+- 🌦️ **天气适配**：根据天气类型（晴天、雨天、雪天、雾天等）添加相应物品
+- 🚗 **交通适配**：不同交通方式生成特定物品（如飞机需要U型枕、自驾需要应急工具等）
+- 📋 **完整清单**：提供扁平化的完整物品清单，方便核对
+- 💡 **智能摘要**：自动生成清单摘要说明，包含出行建议
 
 ## 🔧 添加新工具
 
