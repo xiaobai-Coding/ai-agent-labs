@@ -1,6 +1,8 @@
 
 # 🤖 AI Agent Labs  
 # 🤖 AI Agent Labs (English)
+
+[中文版本入口](#zh-readme)
 > xiaoBaiCoding's AI Agent Lab  
 > Practical engineering repo for Prompt + Tools + LLM + Function Calling
 
@@ -117,6 +119,7 @@ License: MIT
 
 ---
 
+# <a id="zh-readme"></a>
 # 🤖 AI Agent Labs  
 > xiaoBaiCoding 的 AI 智能体实验室  
 > 基于 Prompt + Tools + LLM + Function Calling 的实战型工程仓库
