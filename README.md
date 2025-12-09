@@ -1,5 +1,123 @@
 
 # 🤖 AI Agent Labs  
+# 🤖 AI Agent Labs (English)
+> xiaoBaiCoding's AI Agent Lab  
+> Practical engineering repo for Prompt + Tools + LLM + Function Calling
+
+---
+
+## 📌 Overview
+AI-Agent-Labs is a collection of runnable AI Agent demos (DeepSeek / OpenAI) focused on:
+- Function Calling toolchains
+- Multi-tool orchestration
+- Tool react/retry (auto fix & retry on failures)
+- Task planning workflows
+- Streaming (SSE) parsing
+- Message trimming & dialogue management
+- Reusable tools in `tools/`
+- Vue 3 web demos
+
+> Goal: real **AI Agent engineering skills**, not LLM toys.
+
+## 📁 Structure
+```
+ai-agent-labs/
+├── tools/                     # Shared tools (all demos)
+│    ├── calculator.ts
+│    ├── unitConverter.ts
+│    ├── weather.ts
+│    ├── travelAdviceTool.ts
+│    ├── trafficTimeTool.ts
+│    ├── packingListTool.ts
+│    ├── todoPlannerTool.ts
+│    └── README.md
+├── 01-Chat-Calculator-Bot/
+├── 02-Chat-UnitConverter/
+├── 03-AI-Weather-Bot/
+├── 04-AI-Assistant-Mini/
+├── 05-AI-Planning/
+├── 06-Chat-Travel-Assistant/
+├── 07-Agent-WorkFlow/
+└── 08-Chat-Travel-Assistant2.0/   # System Executor 1.0 (workflow + error recovery)
+```
+
+## 🧰 Tools (shared)
+| Tool | Description | File |
+|------|-------------|------|
+| calculator | Math ops | `tools/calculator.ts` |
+| unitConverter | Unit conversion (cm/m, kg/g, C/F) | `tools/unitConverter.ts` |
+| weatherTool | Weather (mock) | `tools/weather.ts` |
+| travelAdviceTool | Travel/outfit advice | `tools/travelAdviceTool.ts` |
+| trafficTimeTool | Traffic time (destination + weather) | `tools/trafficTimeTool.ts` |
+| packingListTool | Packing list (transport + weather) | `tools/packingListTool.ts` |
+| todoPlannerTool | Parse planned tasks into structured steps | `tools/todoPlannerTool.ts` |
+
+Full docs: [tools/README.md](./tools/README.md)
+
+## 🧠 Agent Capabilities
+- Function Calling
+- Tool react/retry
+- System Executor error recovery (08): capture step error → ask model to fix params → auto retry → continue workflow
+- Streaming (SSE)
+- Message trimming
+- Prompt + Tools decision loop
+- Planning & execution visualization (06 / 07 / 08)
+  - Planning panel (streaming typing, auto scroll)
+  - Tool log panel (status, params, result, errors, duration)
+  - Simple mode toggle
+
+## 🎯 Demos
+- 01 Calculator Bot
+- 02 Unit Converter
+- 03 Weather Bot
+- 04 Assistant Mini (multi-tool)
+- 05 AI Planning
+- 06 Chat Travel Assistant (full-featured)
+- 07 Agent WorkFlow (todoPlanner-driven UI)
+- 08 Chat Travel Assistant 2.0 (System Executor 1.0: workflow orchestration + error recovery)
+
+Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system executor.
+
+## 🚀 Run
+```bash
+# example: latest full travel assistant
+cd 06-Chat-Travel-Assistant
+npm install
+npm run dev
+```
+Other projects: enter folder → `npm install` → `npm run dev`.
+
+## 🔑 Env
+Create `.env` with your key:
+```bash
+VITE_DEEPSEEK_API_KEY=your_api_key_here
+```
+
+## 🛠 Roadmap
+- [x] Multi-tool Agent
+- [x] Planner Agent
+- [x] Planning & execution visualization
+- [x] Tool duration display
+- [x] Simple mode toggle
+- [x] System Executor 1.0
+- [x] Workflow orchestration + error recovery
+- [x] Two-stage request (WorkflowPlan + system execution)
+- [ ] Real weather API
+- [ ] HTTP/fetch tool
+- [ ] Auto parameter inference
+- [ ] Large pipeline demo
+- [ ] Chat UI component library
+- [ ] Tool performance panel
+- [ ] Multi-agent framework
+- [ ] Workflow visual editor (drag-drop)
+
+## 🧑‍💻 Author & License
+**xiaoBaiCoding** — Frontend → AI engineer. Focus: LLM apps, Agents, Function Calling.  
+License: MIT
+
+---
+
+# 🤖 AI Agent Labs  
 > xiaoBaiCoding 的 AI 智能体实验室  
 > 基于 Prompt + Tools + LLM + Function Calling 的实战型工程仓库
 
