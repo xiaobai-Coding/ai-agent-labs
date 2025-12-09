@@ -365,7 +365,7 @@ const startPlanningFlow = async () => {
 };
 
 const IDENTITY_RESPONSE =
-  "您好，我是由default模型提供支持，作为Cursor IDE的核心功能之一，可协助完成各类开发任务，只要是编程相关的问题，都可以问我！你现在有什么想做的吗？";
+  "我是基于default模型的AI助手，在Cursor IDE中为您提供支持。我能够在Cursor IDE中为您提供全方位的支持。不论是编程疑难解答、代码优化建议、技术知识讲解，还是日常开发中的各种任务，我都可以为您提供高效、专业的帮助。无论您遇到什么问题，都可以随时向我提问，我会尽力为您提供最优的解决方案，助力您的开发之路更加顺畅！";
 
 const identityPatterns = [
   /什么模型/,
@@ -388,59 +388,90 @@ const debugFieldLine = showReasoning.value
   : `"debug_reasoning": null`;
 // 系统提示词
 const SYSTEM_PROMPT = `
-你是旅行与出行规划助手（Travel Agent）。需要理解用户需求，拆解可执行步骤，并调用可用工具完成任务。工具由外部执行器调用，你只需给出调用意图与参数。
+你是一个旅行规划智能体（Travel Agent），你的目标是：
+根据用户需求 → 生成一个完整的多步骤旅行准备规划（Workflow Plan）。
+⚠️ 你只负责「规划」，不负责执行工具！
 
-【决策规则】
-当用户的目标包含可执行任务时，你必须：
-1. 在内部拆解任务为 3-7 步
-2. 如果某些步骤需要外部工具能力 → 使用工具执行  
-3. 如果没有合适的工具 → 直接内部推理执行该步骤  
-4. 每步执行后检查结果，如不合理必须重新尝试
-5. 所有步骤完成后统一输出最终结果 JSON
+执行工具、依赖顺序、结果整合，全由系统执行器完成。你不需要调用工具，只负责理解用户的需求并
+解析参数即可。
+【你的职责 / Responsibilities】
+✔ 分析用户意图
+✔ 将用户目标拆解成 3-6 个可执行子任务
+✔ 自动提取结构化参数 params
+✔ 为每个子任务选择正确的工具（见工具清单）
+✔ 输出结构化的 JSON 计划供系统执行器执行
+【参数提取规则】
+从用户输入提取以下字段：
+destination (string) - **必须**，目的地城市名称，例如"北京"、"上海"。如果用户未明确指定，必须从上下文推断，不能为空字符串。
+date (string) - **必须**，日期信息，例如"明天"、"下周四"并转换为具体日期格式（YYYY-MM-DD）。如果用户未明确指定，推断为"今天"或"明天"。
+from_city (string) - 可选，出发地，默认为"重庆"
+travel_days (number) - 可选，默认为1
+extra (string) - 可选，例如"带孩子"、"老人随行"
+transportation_preference (string) - 可选，交通偏好，默认为"飞机"，可选值：["自驾", "高铁", "飞机", "火车"]
 
-【关于 todoPlannerTool 工具】
-1. 必须在多步骤任务开始前调用
-2. steps_text 必须是「已思考完成的明确子任务列表」
-3. 每个子任务必须可执行，而不是原文复述
+⚠️ 重要：destination 和 date 是必填参数，必须从用户输入中提取或合理推断，不能为空字符串或 null。
 
-示例：
-todoPlannerTool({
-  "steps_text": "打包衣物\n整理文件\n联系搬家公司"
-})
-你是一个旅行规划助手（Travel Agent）。你需要理解用户的出行需求，并协助规划准备事项。你具备以下能力：
-- 用户意图分析（Planning）
-- 参数解析（Parameter Extraction）
-- 输出可执行步骤列表（Workflow Planning）
-- 不执行工具调用（工具调用由外部执行器完成）
-- 不重复规划、不循环工具
-- 不直接产生最终总结（除非所有工具步骤执行完成后）
+【Workflow JSON 输出格式（必须严格遵守）】
+【steps 数组并不是固定的列出全部的工具，而是根据用户的需求来构造，例如用户的需求只是查询天气
+那就只需要构造查询天气的任务步骤】
+{
+  "phase": "planning",
+  "params": {
+    "destination": "北京",
+    "date": "2025-12-12",
+    "from_city": "重庆",
+    "travel_days": "1",
+    "transportation_preference": "飞机",
+},
+  "steps": [
+    {
+      "id": number,
+      "action": "string（任务内容）",
+      "category": "weather | traffic | outfit | packing | final",
+      "tool": "weatherTool | trafficTimeTool | travelAdviceTool | packingListTool | null",
+      "depends_on": [id, id...],
+      "status": "pending"
+    }
+  ]
+}
 
-【执行阶段】
-按照 steps 顺序执行：
-- 如果有合适工具 → 优先调用工具
-- 如果没有工具 → 模型根据知识自行执行
+【工具依赖规则】
+1. weatherTool           → 必须最优先执行，用于获取天气数据
+2. travelAdviceTool      → 必须依赖 weatherTool
+3. trafficTimeTool       → 可独立执行，用于距离/交通时间
+4. packingListTool       → 必须依赖 weatherTool 和 trafficTimeTool
+5. 最终整合步骤（final） → depends_on 所有工具步骤，tool = null
 
-【工具失败处理】
-- 必须分析错误原因
-- 修复参数并再次尝试执行
-- 如果多次失败 → 内部推理替代工具执行
+⚠ 重要约束：
+- 每个工具只允许执行一次（NO 重复调用）
+- NO 无限循环规划
+- NO 直接执行工具
+- NO 输出最终结果，你只生成「可执行计划」
 
-【禁止行为】
-✘ 直接拒绝执行
-✘ 一次性输出全部答案跳过步骤
-✘ 将用户原话作为 steps_text
-✘ 输出非 JSON 文本
-✘ 胡编乱造数据（除非明确允许模拟）
+====================
+【示例步骤设计参考】
+====================
+steps:
+1. 查询天气（tool: weatherTool）
+2. 获取交通信息（tool: trafficTimeTool）
+3. 生成穿衣建议（tool: travelAdviceTool）
+4. 生成打包清单（tool: packingListTool）
+5. 整合所有信息 → 最终结果（tool: null）
 
-你是一个可以独立执行任务的 Autonomous Agent。
-无论是否有工具，你都必须想办法完成用户任务。
+【禁止行为，非常重要】
+1. 直接调用工具
+2. 直接输出建议或最终 JSON
+3. 跳过天气或交通步骤
+4. 输出和格式不符的内容
 
-
+你是一个 Planner Agent —— 永远只负责制定计划。
+【最终输出的result字段内容要求精简，言简意赅，不要过多的废话】
+【如果用户使用英文提问，请使用英文输出】
 【最终输出格式要求（非常重要）】：
-1. 无论是否调用了工具，你对“用户可见的最终回复”必须是一个 JSON 字符串，对应如下结构：
+你对“用户可见的最终回复”必须是一个 JSON 字符串，对应如下结构：
    {
      "judgement": "has_evidence" 或 "no_evidence",
-     "result": null 或 "string",
+     "result": "Workflow JSON",
      "reason": "string（简要说明你的判断和结论依据）",
      "confidence": 0 ~ 1 之间的小数（表示你对回答的信心）,
      "debug": "不超过2行的简短推理摘要，用于调试"
@@ -535,13 +566,19 @@ const addMessage = (content: string, sender: 'user' | 'ai' | 'tool', debugReason
 const scrollToBottom = () => {
   const chatContainer = document.getElementById('chat-container');
   if (chatContainer) {
-    // 使用平滑滚动
-    chatContainer.scrollTo({
-      top: chatContainer.scrollHeight,
-      behavior: 'smooth'
+    // 等待 ai-status-panel 高度稳定后再滚动
+    // 使用 requestAnimationFrame 确保在 DOM 更新后执行
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        // 双重 requestAnimationFrame 确保所有布局更新完成
+        chatContainer.scrollTo({
+          top: chatContainer.scrollHeight,
+          behavior: 'smooth'
+        });
+        // 滚动后隐藏按钮
+        showScrollToBottomButton.value = false;
+      });
     });
-    // 滚动后隐藏按钮
-    showScrollToBottomButton.value = false;
   }
 };
 
@@ -651,8 +688,16 @@ sendMessage = async () => {
 
   sessionStorage.setItem("chatMessages", JSON.stringify(messages.value));
 
-  // 滚动到底部
-  nextTick(scrollToBottom);
+  // 滚动到底部 - 等待 ai-status-panel 高度稳定
+  nextTick(() => {
+    // 等待 Vue 响应式更新完成
+    requestAnimationFrame(() => {
+      // 等待浏览器布局更新完成（包括 ai-status-panel 的高度变化）
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    });
+  });
 
   try {
     // 构建模型消息（包含 system、user、ai）
@@ -691,6 +736,23 @@ sendMessage = async () => {
         if (event.toolName === "todoPlannerTool" && event.type === "success" && event.result) {
           // 异步渲染，不阻塞主流程
           void renderTodoPlannerResult(event.result);
+        }
+        // 如果是 workflow 工具执行，在规划面板中显示步骤信息
+        if (event.args?.action && event.args?.category) {
+          const stepText = `🔧 ${event.args.action} (${event.args.category})`;
+          const existingItem = planningItems.value.find(
+            item => item.text.includes(event.args.action)
+          );
+          if (!existingItem && event.type === "start") {
+            // 添加新的步骤项
+            const stepId = `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+            planningItems.value.push({
+              id: stepId,
+              text: stepText,
+              isTyping: false
+            });
+            scrollPlanningListToBottom();
+          }
         }
       }
     };
@@ -815,6 +877,10 @@ const retryLastMessage = async (): Promise<void> => {
     focusInput();
   }
 }
+// ResizeObserver 用于监听 ai-status-panel 高度变化
+let statusPanelResizeObserver: ResizeObserver | null = null;
+let previousPanelHeight = 0;
+
 // 组件挂载后，加载聊天记录
 onMounted(() => {
   // 从sessionStorage加载聊天记录
@@ -838,6 +904,48 @@ onMounted(() => {
       scrollToBottom();
     });
   }
+
+  // 监听 ai-status-panel 高度变化，实时调整滚动位置
+  nextTick(() => {
+    const aiStatusPanel = document.querySelector('.ai-status-panel') as HTMLElement;
+    if (aiStatusPanel && chatContainer) {
+      // 记录初始高度
+      previousPanelHeight = aiStatusPanel.offsetHeight;
+      
+      statusPanelResizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const currentHeight = entry.target.clientHeight;
+          const heightDiff = currentHeight - previousPanelHeight;
+          
+          // 如果高度发生变化
+          if (Math.abs(heightDiff) > 1) {
+            // 检查用户是否在底部附近（100px 范围内）
+            const isNearBottom = 
+              chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 100;
+            
+            // 如果用户在底部附近，调整滚动位置以补偿高度变化
+            if (isNearBottom) {
+              requestAnimationFrame(() => {
+                // 调整滚动位置，补偿高度变化
+                chatContainer.scrollTop += heightDiff;
+                // 确保滚动到底部
+                chatContainer.scrollTo({
+                  top: chatContainer.scrollHeight,
+                  behavior: 'auto'
+                });
+              });
+            }
+            
+            // 更新记录的高度
+            previousPanelHeight = currentHeight;
+          }
+        }
+      });
+      
+      statusPanelResizeObserver.observe(aiStatusPanel);
+    }
+  });
+
   // 初次挂载时，让输入框自动获得焦点
   focusInput();
 });
@@ -895,6 +1003,11 @@ onUnmounted(() => {
   if (durationUpdateTimer) {
     clearInterval(durationUpdateTimer);
     durationUpdateTimer = null;
+  }
+  // 清理 ResizeObserver
+  if (statusPanelResizeObserver) {
+    statusPanelResizeObserver.disconnect();
+    statusPanelResizeObserver = null;
   }
 })
 </script>
@@ -957,7 +1070,7 @@ onUnmounted(() => {
         </div>
         <transition name="collapse">
           <div v-show="toolPanelOpen" ref="toolLogListRef" class="status-list">
-            <div v-for="(log, index) in toolLogs" :key="log.id" :class="['tool-log-item', `tool-log-${log.status}`]">
+            <div v-for="(log, index) in [...toolLogs].reverse()" :key="log.id" :class="['tool-log-item', `tool-log-${log.status}`]">
               <div class="tool-log-header">
                 <span class="tool-log-number">{{ index + 1 }}</span>
                 <span class="tool-log-icon">{{ toolIconMap[log.status] }}</span>

@@ -45,7 +45,8 @@ ai-agent-labs/
 ├── 04-AI-Assistant-Mini/     # 多功能集成助手
 ├── 05-AI-Planning/           # 任务规划智能体
 ├── 06-Chat-Travel-Assistant/ # 旅行助手（功能最全的场景 Demo）
-└── 07-Agent-WorkFlow/        # Agent 工作流编排 & 可视化（基于 todoPlannerTool）
+├── 07-Agent-WorkFlow/        # Agent 工作流编排 & 可视化（基于 todoPlannerTool）
+└── 08-Chat-Travel-Assistant2.0/ # 系统执行器 1.0（工作流编排 + 错误恢复）
 ```
 
 特点：
@@ -67,6 +68,8 @@ ai-agent-labs/
 | unitConverter | 单位换算工具（cm/m, kg/g, C/F） | `tools/unitConverter.ts` |
 | weatherTool | 天气查询工具（Mock 数据版） | `tools/weather.ts` |
 | travelAdviceTool | 出行建议工具（基于天气生成建议） | `tools/travelAdviceTool.ts` |
+| trafficTimeTool | 交通时间估算工具（基于目的地和天气） | `tools/trafficTimeTool.ts` |
+| packingListTool | 物品清单生成工具（基于交通方式和天气） | `tools/packingListTool.ts` |
 | todoPlannerTool | 任务规划拆解工具（将模型思考好的多条子任务文本解析为结构化待办 steps） | `tools/todoPlannerTool.ts` |
 
 工具会自动被 Agent 调用，用于真实执行能力，而不是让模型"猜"。
@@ -90,7 +93,18 @@ ai-agent-labs/
 - 让 LLM 修复参数  
 - 自动发起第二次工具调用  
 
-这是智能体真正“能跑起来”的关键机制。
+这是智能体真正"能跑起来"的关键机制。
+
+### ✔ 2.1 系统执行器错误恢复（08 项目独有）⭐
+当工作流步骤执行失败时：
+
+- 系统自动捕获错误（不中断整个工作流）
+- 构造错误恢复提示，发送给模型分析
+- 模型返回修正后的参数
+- 自动重试失败的步骤
+- 继续执行后续步骤，确保工作流完成
+
+这是企业级工作流编排的核心能力。
 
 ### ✔ 3. 流式能力（Streaming）  
 通过 SSE 解析 `result` 字段，实现流式响应。
@@ -200,10 +214,10 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 
 ### **7️⃣ Agent WorkFlow（任务工作流智能体）⭐ 规划链路推荐**
 
-**专注“任务拆解 + 工具链执行” 的工作流级 Agent Demo，主打 todoPlannerTool 的使用方式**
+**专注"任务拆解 + 工具链执行" 的工作流级 Agent Demo，主打 todoPlannerTool 的使用方式**
 
 #### 核心功能
-- ✅ 使用 `todoPlannerTool` 将模型“内心规划”的任务列表解析为结构化 steps（id/title/status）
+- ✅ 使用 `todoPlannerTool` 将模型"内心规划"的任务列表解析为结构化 steps（id/title/status）
 - ✅ 将工具返回的 steps **直接渲染到「任务规划步骤」面板**，可视化完整工作流
 - ✅ 支持多工具协作（计算器 / 单位换算 / 天气 / 出行建议等）
 - ✅ 任务链执行状态可视化（pending / running / done）
@@ -215,7 +229,34 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 
 📁 路径：`07-Agent-WorkFlow/`
 
-> 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流的最佳实践**
+---
+
+### **8️⃣ Chat Travel Assistant 2.0（系统执行器 1.0）⭐ 最新推荐**
+
+**系统驱动的工作流编排 Agent，实现真正的"系统执行器"架构**
+
+#### 核心特性
+- ✅ **系统执行器架构**：由系统（而非模型）驱动工具调用链
+- ✅ **工作流编排**：支持步骤依赖（depends_on）、多工具调用链
+- ✅ **错误恢复机制**：步骤执行失败时自动修复参数并重试，不中断整个工作流
+- ✅ **两阶段请求**：第一阶段强制模型输出 WorkflowPlan，第二阶段系统执行器接管
+- ✅ **工作流可视化**：实时展示任务规划步骤和工具执行日志
+- ✅ **智能滚动**：自动监听面板高度变化，实时调整滚动位置
+
+#### 技术亮点
+- 🔧 **工具适配器模式**：解耦工具实现与工作流系统
+- 🔄 **错误恢复流程**：模型分析错误 → 修正参数 → 自动重试
+- 📊 **工作流状态管理**：pending / running / done / error 完整状态流转
+- 🎯 **依赖关系处理**：自动检查步骤依赖，按顺序执行
+
+#### 与 06/07 项目的区别
+- **06 项目**：模型直接调用工具，工具反制机制
+- **07 项目**：任务规划可视化，todoPlannerTool 驱动 UI
+- **08 项目**：系统执行器架构，工作流编排 + 错误恢复（企业级能力）
+
+📁 路径：`08-Chat-Travel-Assistant2.0/`
+
+> 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流，08 看系统执行器架构**
 
 ---
 
@@ -280,6 +321,9 @@ VITE_DEEPSEEK_API_KEY=your_api_key_here
 * [x] 任务规划与执行可视化 ✅
 * [x] 工具调用耗时展示 ✅
 * [x] 简洁模式开关 ✅
+* [x] 系统执行器架构（System Executor 1.0）✅
+* [x] 工作流编排与错误恢复机制 ✅
+* [x] 两阶段请求（WorkflowPlan 生成 + 系统执行）✅
 * [ ] 真实天气 API 版本
 * [ ] 真实 HTTP 工具支持（fetchTool）
 * [ ] AI 自动生成工具参数（参数推断）
@@ -287,6 +331,7 @@ VITE_DEEPSEEK_API_KEY=your_api_key_here
 * [ ] Chat UI 通用组件库
 * [ ] 工具调用性能分析面板
 * [ ] 多 Agent 协作框架
+* [ ] 工作流可视化编辑器（拖拽式编排）
 
 ---
 
