@@ -40,7 +40,9 @@ ai-agent-labs/
 ├── 05-AI-Planning/
 ├── 06-Chat-Travel-Assistant/
 ├── 07-Agent-WorkFlow/
-└── 08-Chat-Travel-Assistant2.0/   # System Executor 1.0 (workflow + error recovery)
+├── 08-Chat-Travel-Assistant2.0/   # System Executor 1.0 (workflow + error recovery)
+├── 09-RAG-Demo/                   # RAG demo (vector search + similarity)
+└── 10-Document-RAG-Demo/          # Document parser + AI summary + chunking
 ```
 
 ## 🧰 Tools (shared)
@@ -77,8 +79,10 @@ Full docs: [tools/README.md](./tools/README.md)
 - 06 Chat Travel Assistant (full-featured)
 - 07 Agent WorkFlow (todoPlanner-driven UI)
 - 08 Chat Travel Assistant 2.0 (System Executor 1.0: workflow orchestration + error recovery)
+- 09 RAG Demo (vector search + similarity matching)
+- 10 Document RAG Demo (document parser + AI summary + chunking + reference jump)
 
-Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system executor.
+Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system executor, 09→10 RAG pipeline.
 
 ## 🚀 Run
 ```bash
@@ -104,6 +108,8 @@ VITE_DEEPSEEK_API_KEY=your_api_key_here
 - [x] System Executor 1.0
 - [x] Workflow orchestration + error recovery
 - [x] Two-stage request (WorkflowPlan + system execution)
+- [x] RAG demo (vector search + similarity)
+- [x] Document parser + AI summary + chunking + reference jump
 - [ ] Real weather API
 - [ ] HTTP/fetch tool
 - [ ] Auto parameter inference
@@ -167,7 +173,9 @@ ai-agent-labs/
 ├── 05-AI-Planning/           # 任务规划智能体
 ├── 06-Chat-Travel-Assistant/ # 旅行助手（功能最全的场景 Demo）
 ├── 07-Agent-WorkFlow/        # Agent 工作流编排 & 可视化（基于 todoPlannerTool）
-└── 08-Chat-Travel-Assistant2.0/ # 系统执行器 1.0（工作流编排 + 错误恢复）
+├── 08-Chat-Travel-Assistant2.0/ # 系统执行器 1.0（工作流编排 + 错误恢复）
+├── 09-RAG-Demo/              # RAG 演示（向量检索 + 相似度匹配）
+└── 10-Document-RAG-Demo/     # 文档解析 + AI 摘要 + 分块 + 引用跳转
 ```
 
 特点：
@@ -377,9 +385,56 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 
 📁 路径：`08-Chat-Travel-Assistant2.0/`
 
-> 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流，08 看系统执行器架构**
+---
+
+### **9️⃣ RAG Demo（RAG 演示）**
+
+**展示 RAG 系统的核心概念：向量检索和语义相似度搜索**
+
+#### 核心功能
+- ✅ **向量化 (Embedding)**：文本转换为向量表示（Mock 实现）
+- ✅ **相似度计算**：使用余弦相似度计算查询与文档的匹配度
+- ✅ **文档检索**：根据相似度分数返回 Top-K 相关文档
+- ✅ **结果展示**：实时查询，显示检索结果和相似度分数
+- ✅ **现代化 UI**：玻璃态设计风格，符合 RAG 项目风格
+
+#### 技术亮点
+- 🎯 完整的 RAG 工作流程演示
+- 📊 相似度评分可视化
+- 🔍 Top-K 检索算法实现
+- 🎨 响应式布局设计
+
+📁 路径：`09-RAG-Demo/`
 
 ---
+
+### **🔟 Document RAG Demo（文档解析 + AI 摘要）⭐ RAG 完整流程**
+
+**完整的文档处理解决方案，包含文档解析、智能分块、AI 摘要生成和引用跳转**
+
+#### 核心功能
+- ✅ **多格式解析**：支持 PDF 和 DOCX 文件解析
+- ✅ **智能分块**：自动将文档切分为重叠的文本片段（400 字符/块，80 字符重叠）
+- ✅ **AI 摘要生成**：基于 DeepSeek API 自动生成文档摘要和关键点
+- ✅ **引用跳转**：摘要中的引用可点击跳转到原文片段并高亮显示
+- ✅ **分页处理**：自动识别并标记文档分页
+
+#### 技术亮点
+- 🎯 完整的 RAG 预处理流程：解析 → 分块 → 摘要 → 引用
+- 🤖 AI 驱动的摘要生成（流式输出）
+- 🔗 智能引用系统：支持 `[[#1,#2,#3]]` 多引用格式
+- 🎨 统一紫蓝色视觉体系，双栏布局（左侧摘要，右侧文档）
+- ✂️ 重叠分块算法，保留上下文信息
+
+#### 使用场景
+- 文档预处理和向量化准备
+- RAG 系统的文档分析模块
+- 长文档快速摘要和关键点提取
+- 文档内容引用和溯源
+
+📁 路径：`10-Document-RAG-Demo/`
+
+> 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流，08 看系统执行器架构，09→10 看 RAG 完整流程**
 
 ## 🚀 如何运行
 
@@ -421,6 +476,16 @@ npm run dev
 cd 05-AI-Planning
 npm install
 npm run dev
+
+# RAG 演示
+cd 09-RAG-Demo
+npm install
+npm run dev
+
+# 文档解析 + AI 摘要
+cd 10-Document-RAG-Demo
+npm install
+npm run dev
 ```
 
 ### 环境变量配置
@@ -445,6 +510,8 @@ VITE_DEEPSEEK_API_KEY=your_api_key_here
 * [x] 系统执行器架构（System Executor 1.0）✅
 * [x] 工作流编排与错误恢复机制 ✅
 * [x] 两阶段请求（WorkflowPlan 生成 + 系统执行）✅
+* [x] RAG 演示（向量检索 + 相似度匹配）✅
+* [x] 文档解析 + AI 摘要 + 分块 + 引用跳转 ✅
 * [ ] 真实天气 API 版本
 * [ ] 真实 HTTP 工具支持（fetchTool）
 * [ ] AI 自动生成工具参数（参数推断）

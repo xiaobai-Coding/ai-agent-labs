@@ -58,6 +58,5 @@ export async function extractDocxText(file: File): Promise<string> {
       index > 0 ? `\n\n[可能的分页位置 ${index + 1}]\n\n${chunk}` : chunk
     ).join('');
   }
-  
   return rawText;
 }
