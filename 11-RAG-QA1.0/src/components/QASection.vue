@@ -1,5 +1,5 @@
 <template>
-  <div class="card qa-card">
+  <div class="ui-card qa-card">
     <div class="card-header">
       <div class="dot purple"></div>
       <span>RAG 文档问答</span>
@@ -216,9 +216,9 @@ async function handleAsk() {
 
 <style scoped>
 .qa-card {
-  background: linear-gradient(135deg, rgba(243, 244, 255, 0.98) 0%, rgba(236, 239, 255, 0.95) 100%);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-  box-shadow: 0 8px 32px rgba(79, 70, 229, 0.08);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
   position: relative;
   overflow: hidden;
   min-height: 400px;
@@ -232,28 +232,29 @@ async function handleAsk() {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-weight: 700;
-  color: #1E2239;
-  margin-bottom: 16px;
-  font-size: 16px;
+  color: var(--text-1);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-lg);
 }
 
 .qa-card .dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #6366f1;
+  background: var(--primary);
 }
 
 .qa-card .count {
   margin-left: auto;
-  font-size: 12px;
-  color: #6366f1;
+  font-size: var(--text-xs);
+  color: var(--text-2);
   font-weight: 500;
   padding: 4px 10px;
-  background: rgba(99, 102, 241, 0.12);
-  border-radius: 999px;
+  background: var(--primary-weak);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
 }
 
 .qa-card .qa-input {

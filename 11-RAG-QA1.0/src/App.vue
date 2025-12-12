@@ -25,7 +25,7 @@
     </section>
 
     <section class="layout" v-if="text">
-      <div class="card summary-card">
+      <div class="ui-card summary-card">
         <div class="card-header">
           <div class="dot purple"></div>
           <span>AI 摘要</span>
@@ -34,7 +34,22 @@
 
         <div v-if="summaryLoading" class="summary-loading">
           <span class="spinner"></span>
-          <span>AI 正在总结文档…</span>
+          <span>摘要生成中…</span>
+          <div class="skeleton-lines">
+            <div class="skeleton-line long"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line short"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line long"></div>
+          </div>
+          <div class="skeleton-lines">
+            <div class="skeleton-line long"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line short"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line long"></div>
+          </div>
         </div>
 
         <div v-else-if="summaryError" class="summary-error">
@@ -80,11 +95,11 @@
         </div>
       </div>
 
-      <div class="card text-card">
+      <div class="ui-card ui-card--dark text-card">
         <div class="card-header">
           <div class="dot blue"></div>
           <span class="text-card-title">提取的文本内容</span>
-          <span class="count" v-if="text">{{ Math.ceil(text.length / 1000) }}K 字符</span>
+          <span class="count ui-badge" v-if="text">{{ Math.ceil(text.length / 1000) }}K 字符</span>
         </div>
         <TextViewer :chunks="chunks" :highlight-chunk-indices="highlightChunks" ref="textViewerRef" />
       </div>
@@ -288,12 +303,10 @@ ${chunks.value.map((c, i) => `#${i + 1}: ${c}`).join("\n------------\n")}
       messages,
       false,
       (partial: string) => {
-        console.log("partial====>", partial);
         streamed += partial;
       }
     );
     const content = res?.content;
-    console.log("content====>", content);
     const parsed = JSON.parse(content);
     if (parsed?.summary && Array.isArray(parsed?.key_points)) {
       summary.value = {
@@ -316,11 +329,11 @@ ${chunks.value.map((c, i) => `#${i + 1}: ${c}`).join("\n------------\n")}
 .page {
   min-height: 100vh;
   padding: 48px 20px 64px;
-  background: #F7F8FF;
-  color: #111827;
+  background: var(--bg-page);
+  color: var(--text-1);
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--space-6);
   box-sizing: border-box;
 }
 
@@ -332,13 +345,11 @@ ${chunks.value.map((c, i) => `#${i + 1}: ${c}`).join("\n------------\n")}
 }
 
 .hero-content {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.98) 100%);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-  border-radius: 20px;
-  box-shadow: 
-    0 8px 32px rgba(79, 70, 229, 0.1),
-    0 0 0 1px rgba(99, 102, 241, 0.05) inset;
-  padding: 20px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
   position: relative;
   overflow: hidden;
 }
@@ -522,30 +533,37 @@ h1 {
 }
 
 .dot.blue {
-  background: #6366f1;
+  background: var(--primary);
 }
 
 .dot.purple {
-  background: #6366f1;
+  background: var(--primary);
 }
 
 .count {
   margin-left: auto;
-  font-size: 12px;
-  color: #6366f1;
+  font-size: var(--text-xs);
+  color: var(--text-2);
   font-weight: 500;
   padding: 4px 10px;
-  background: rgba(99, 102, 241, 0.12);
-  border-radius: 999px;
+  background: var(--primary-weak);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
 }
-
+.ui-badge{
+  background: #6366f1;
+  border-radius: #999;
+  border: 1px solid #6366f1;
+  color: #fff;
+}
 .summary-card {
   min-height: 400px;
   max-height: 700px;
   height: 100%; /* 填充网格单元格 */
-  background: linear-gradient(135deg, rgba(236, 239, 255, 0.98), rgba(225, 234, 255, 0.95), rgba(219, 234, 254, 0.92));
-  border: 1px solid rgba(99, 102, 241, 0.12);
-  box-shadow: 0 12px 40px rgba(79, 70, 229, 0.08);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-card);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -602,10 +620,71 @@ h1 {
   align-items: center;
   gap: 10px;
   color: #6b7280;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px 16px 18px;
 }
 
 .summary-error {
   color: #dc2626;
+}
+
+.skeleton-lines {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.skeleton-line {
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(245, 247, 255, 0.9), rgba(225, 230, 255, 0.95), rgba(245, 247, 255, 0.9));
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton-line.long {
+  width: 98%;
+}
+
+.skeleton-line.short {
+  width: 78%;
+}
+
+.skeleton-line:not(.long):not(.short) {
+  width: 92%;
+}
+
+.skeleton-panel {
+  width: 100%;
+  min-height: 180px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(243, 244, 255, 0.9), rgba(228, 232, 255, 0.85));
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 8px 24px rgba(79, 70, 229, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(250%); }
 }
 
 .summary-content h3 {
@@ -670,13 +749,14 @@ h1 {
   min-height: 400px;
   max-height: 700px;
   height: 100%; /* 填充网格单元格 */
-  background: #1E2239;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 12px 40px rgba(79, 70, 229, 0.08);
+  background: var(--bg-card-dark);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  border-radius: var(--radius-card);
 }
 
 .text-card .card-header {
