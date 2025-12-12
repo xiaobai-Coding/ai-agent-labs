@@ -42,7 +42,8 @@ ai-agent-labs/
 ├── 07-Agent-WorkFlow/
 ├── 08-Chat-Travel-Assistant2.0/   # System Executor 1.0 (workflow + error recovery)
 ├── 09-RAG-Demo/                   # RAG demo (vector search + similarity)
-└── 10-Document-RAG-Demo/          # Document parser + AI summary + chunking
+├── 10-Document-RAG-Demo/          # Document parser + AI summary + chunking
+└── 11-RAG-QA1.0/                  # Complete RAG QA system (embedding + retrieval + MMR + AI QA)
 ```
 
 ## 🧰 Tools (shared)
@@ -81,8 +82,9 @@ Full docs: [tools/README.md](./tools/README.md)
 - 08 Chat Travel Assistant 2.0 (System Executor 1.0: workflow orchestration + error recovery)
 - 09 RAG Demo (vector search + similarity matching)
 - 10 Document RAG Demo (document parser + AI summary + chunking + reference jump)
+- 11 RAG QA 1.0 (complete RAG QA system: embedding + retrieval + MMR + AI QA + multi-reference jump)
 
-Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system executor, 09→10 RAG pipeline.
+Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system executor, 09→10 RAG pipeline, 11 complete RAG QA.
 
 ## 🚀 Run
 ```bash
@@ -110,6 +112,7 @@ VITE_DEEPSEEK_API_KEY=your_api_key_here
 - [x] Two-stage request (WorkflowPlan + system execution)
 - [x] RAG demo (vector search + similarity)
 - [x] Document parser + AI summary + chunking + reference jump
+- [x] Complete RAG QA system (embedding + retrieval + MMR + AI QA)
 - [ ] Real weather API
 - [ ] HTTP/fetch tool
 - [ ] Auto parameter inference
@@ -175,7 +178,8 @@ ai-agent-labs/
 ├── 07-Agent-WorkFlow/        # Agent 工作流编排 & 可视化（基于 todoPlannerTool）
 ├── 08-Chat-Travel-Assistant2.0/ # 系统执行器 1.0（工作流编排 + 错误恢复）
 ├── 09-RAG-Demo/              # RAG 演示（向量检索 + 相似度匹配）
-└── 10-Document-RAG-Demo/     # 文档解析 + AI 摘要 + 分块 + 引用跳转
+├── 10-Document-RAG-Demo/     # 文档解析 + AI 摘要 + 分块 + 引用跳转
+└── 11-RAG-QA1.0/             # 完整 RAG 问答系统（向量化 + 检索 + MMR + AI 问答）
 ```
 
 特点：
@@ -434,7 +438,40 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 
 📁 路径：`10-Document-RAG-Demo/`
 
-> 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流，08 看系统执行器架构，09→10 看 RAG 完整流程**
+---
+
+### **1️⃣1️⃣ RAG QA 1.0（完整 RAG 问答系统）⭐ 最新推荐**
+
+**端到端的 RAG 问答系统，集成文档解析、向量化、语义检索和生成式问答的完整流程**
+
+#### 核心功能
+- ✅ **文档解析**：支持 PDF 和 DOCX 文件解析，自动分页标记
+- ✅ **智能分块**：自动将文档切分为重叠的文本片段（400 字符/块，80 字符重叠）
+- ✅ **向量化**：使用阿里 DashScope Embedding (`text-embedding-v4`) 生成文本向量
+- ✅ **语义检索**：基于余弦相似度的向量检索，支持 MMR 算法优化
+- ✅ **AI 问答**：基于 DeepSeek API 的智能问答，完全基于文档内容
+- ✅ **引用跳转**：回答中的引用可点击跳转到原文片段并高亮显示
+- ✅ **多引用支持**：支持 `[[1,4]]`、`[[2,5,6]]` 等多引用格式
+- ✅ **AI 摘要**：自动生成文档摘要和关键点
+
+#### 技术亮点
+- 🎯 **完整 RAG 流程**：文档解析 → 文本分块 → 向量化 → 语义检索 → AI 生成
+- 🔢 **向量化缓存**：自动缓存已生成的向量，避免重复计算
+- 🔍 **MMR 算法**：最大边际相关性检索，平衡相关性和多样性
+- 🔗 **智能跳转**：点击引用自动滚动到最小编号的片段位置，同时高亮所有引用
+- ⚡ **Flash 动画**：跳转时显示闪烁动画，突出定位位置
+- ⌨️ **键盘快捷键**：Enter 发送，Shift+Enter 换行
+- 🎨 **统一视觉体系**：三栏布局（AI 摘要、文档内容、文档问答），紫蓝色主题
+
+#### 使用场景
+- 文档知识库问答系统
+- 企业知识管理平台
+- 智能客服系统
+- 长文档智能问答
+
+📁 路径：`11-RAG-QA1.0/`
+
+> 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流，08 看系统执行器架构，09→10 看 RAG 完整流程，11 看完整 RAG 问答系统**
 
 ## 🚀 如何运行
 
@@ -486,6 +523,11 @@ npm run dev
 cd 10-Document-RAG-Demo
 npm install
 npm run dev
+
+# 完整 RAG 问答系统
+cd 11-RAG-QA1.0
+npm install
+npm run dev
 ```
 
 ### 环境变量配置
@@ -512,6 +554,7 @@ VITE_DEEPSEEK_API_KEY=your_api_key_here
 * [x] 两阶段请求（WorkflowPlan 生成 + 系统执行）✅
 * [x] RAG 演示（向量检索 + 相似度匹配）✅
 * [x] 文档解析 + AI 摘要 + 分块 + 引用跳转 ✅
+* [x] 完整 RAG 问答系统（向量化 + 检索 + MMR + AI 问答）✅
 * [ ] 真实天气 API 版本
 * [ ] 真实 HTTP 工具支持（fetchTool）
 * [ ] AI 自动生成工具参数（参数推断）

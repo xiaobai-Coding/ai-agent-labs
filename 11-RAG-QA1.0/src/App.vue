@@ -1,0 +1,771 @@
+<template>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-content">
+        <div class="hero-header">
+          <p class="tag">
+            <span class="tag-icon">📄</span>
+            <span>Document RAG · Parser</span>
+          </p>
+          <h1>Document Parser & Text Extraction</h1>
+        </div>
+        <div class="hero-upload">
+          <FileUploader @file-upload="handleFile" />
+          <p class="hint">支持格式：PDF (.pdf) · DOCX (.docx)</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="status-section" v-if="loading || error">
+      <div class="status-card" :class="{ error: error }">
+        <div class="status-indicator" :class="{ loading: loading, error: error }"></div>
+        <span v-if="loading">⏳ 正在解析文档中…</span>
+        <span v-else-if="error" class="error-text">{{ error }}</span>
+      </div>
+    </section>
+
+    <section class="layout" v-if="text">
+      <div class="card summary-card">
+        <div class="card-header">
+          <div class="dot purple"></div>
+          <span>AI 摘要</span>
+          <span class="count" v-if="chunks.length">片段 {{ chunks.length }} 个</span>
+        </div>
+
+        <div v-if="summaryLoading" class="summary-loading">
+          <span class="spinner"></span>
+          <span>AI 正在总结文档…</span>
+        </div>
+
+        <div v-else-if="summaryError" class="summary-error">
+          {{ summaryError }}
+        </div>
+
+        <div v-else-if="summary" class="summary-content">
+          <h3>摘要</h3>
+          <p class="summary-line">
+            <span v-for="(seg, idx) in parseWithRefs(summary.summary)" :key="`s-${idx}`">
+              <template v-if="seg.type === 'text'">{{ seg.text }}</template>
+              <span v-else class="ref-group">
+                <a
+                  href="#"
+                  class="ref-link"
+                  @click.prevent="scrollToChunks(seg.ids.map(Number))"
+                >[#{{ seg.ids.join(',') }}]</a>
+              </span>
+            </span>
+          </p>
+
+          <h4>关键点</h4>
+          <ul>
+            <li v-for="(kp, idx) in summary.key_points" :key="idx">
+              <span>
+                <span v-for="(seg, j) in parseWithRefs(kp)" :key="`k-${idx}-${j}`">
+                  <template v-if="seg.type === 'text'">{{ seg.text }}</template>
+                  <span v-else class="ref-group">
+                    <a
+                      href="#"
+                      class="ref-link"
+                      @click.prevent="scrollToChunks(seg.ids.map(Number))"
+                    >[#{{ seg.ids.join(',') }}]</a>
+                  </span>
+                </span>
+              </span>
+            </li>
+          </ul>
+        </div>
+
+        <div v-else class="summary-placeholder">
+          上传完成后自动生成摘要…
+        </div>
+      </div>
+
+      <div class="card text-card">
+        <div class="card-header">
+          <div class="dot blue"></div>
+          <span class="text-card-title">提取的文本内容</span>
+          <span class="count" v-if="text">{{ Math.ceil(text.length / 1000) }}K 字符</span>
+        </div>
+        <TextViewer :chunks="chunks" :highlight-chunk-indices="highlightChunks" ref="textViewerRef" />
+      </div>
+
+      <QASection v-if="chunks.length" :chunks="chunks" @scroll-to-chunks="scrollToChunks" />
+    </section>
+
+    <section class="empty-state" v-else-if="!loading && !error">
+      <div class="empty-card">
+        <p>📄 请上传文档开始解析</p>
+      </div>
+    </section>
+  </main>
+</template>
+
+<script setup lang="ts">
+// @ts-nocheck
+import { ref } from "vue";
+// @ts-ignore - Vue component with script setup
+import FileUploader from "./components/FileUploader.vue";
+// @ts-ignore - Vue component with script setup
+import TextViewer from "./components/TextViewer.vue";
+// @ts-ignore - Vue component with script setup
+import QASection from "./components/QASection.vue";
+import { extractPdfText } from "./utils/pdfParser";
+import { extractDocxText } from "./utils/docxParser";
+import { splitIntoChunksWithOverlap } from "./utils/chunk";
+import { streamDeepSeekAPI } from "./services/aiService";
+import { answerQuestion } from "./services/qaService";
+type SummaryResult = {
+  summary: string;
+  key_points: string[];
+};
+
+const text = ref("");
+const loading = ref(false);
+const error = ref("");
+const chunks = ref<string[]>([]); // 文档片段
+const summary = ref<SummaryResult | null>(null);
+const summaryLoading = ref(false);
+const summaryError = ref("");
+const textViewerRef = ref<InstanceType<typeof TextViewer> | null>(null);
+const highlightChunks = ref<number[]>([]);
+let highlightClearTimer: number | null = null;
+const SYSTEM_PROMPT = `
+你是一个严谨的文档分析助手，专门帮用户对上传的 PDF / DOCX 文档做摘要和要点提取。
+
+【你将收到的内容】
+- 用户消息中会提供多段文本片段
+- 每个片段都带有编号，例如：
+  #1: ...
+  #2: ...
+  #3: ...
+
+【你的任务】
+1）根据所有片段，生成对整份文档的整体摘要，要求简洁明了（最多100字）
+2）提取文档中最重要的 3~5 条关键点
+
+【严格要求】
+- 必须完全基于提供的片段内容，不得使用外部知识
+- 不允许凭空捏造、延伸、推测超出内容的信息
+- 如果文档信息不足以支持结论，请在摘要中明确说明
+- 输出必须是合法 JSON，不允许有任何多余字符（如解释文字、Markdown 标记、注释等）
+
+【引用规则（非常重要）】
+- 摘要中的每一句话，末尾都要带上引用来源，例如："……句子内容 [[#1,#3]]"
+- 关键点数组中的每一条也要带引用，例如："xxx 关键点 [[#2]]"
+- 引用中的编号必须对应用户消息中出现过的片段编号
+- 一个句子可以引用多个片段，用逗号分隔，如 [[#1,#4,#5]]
+
+【输出 JSON 格式，不要有任何解释文字，不包含任何其他文字，只包含 JSON 格式】
+{
+  "summary": "string（可以包含多句，每句附带 [[#编号]] 引用）",
+  "key_points": [
+    "string（附带 [[#编号]] 引用）",
+    "string（附带 [[#编号]] 引用）",
+    "string（附带 [[#编号]] 引用）"
+  ]
+}
+`;
+// 文件类型处理器映射
+const fileHandlers: Record<string, (file: File) => Promise<string>> = {
+  ".pdf": (file: File) => extractPdfText(file),
+  ".docx": (file: File) => extractDocxText(file),
+};
+
+// 处理文件上传
+async function handleFile(file: File) {
+  loading.value = true;
+  error.value = "";
+  text.value = "";
+  summary.value = null;
+  summaryError.value = "";
+
+  try {
+    const fileName = file.name.toLowerCase();
+    const extension = fileName.substring(fileName.lastIndexOf("."));
+    const handler = fileHandlers[extension];
+
+    if (!handler) {
+      error.value = "不支持的文件类型，仅支持 PDF 和 DOCX 格式";
+      return;
+    }
+
+    text.value = await handler(file);
+    const overlapChunks = splitIntoChunksWithOverlap(text.value);
+    chunks.value = overlapChunks as string[];
+    console.log("chunks====>", chunks.value);
+    // 生成摘要
+    await generateSummary();
+  } catch (err: any) {
+    error.value = "解析失败：" + err.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+type Segment =
+  | { type: "text"; text: string }
+  | { type: "ref"; ids: string[] };
+
+function parseWithRefs(str: string): Segment[] {
+  const segments: Segment[] = [];
+  // 支持形如 [[#3,#4,#6,#7]]，含多重 #、空格、全角逗号/顿号
+  const regex = /\[\[([#\d,\s，、]+)\]\]/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(str)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", text: str.slice(lastIndex, match.index) });
+    }
+    const ids = match[1]
+      .split(/[,，、]/)
+      .map((id) => id.trim().replace(/^#/, ""))
+      .filter(Boolean);
+    if (ids.length) {
+      segments.push({ type: "ref", ids });
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < str.length) {
+    segments.push({ type: "text", text: str.slice(lastIndex) });
+  }
+  return segments;
+}
+
+/**
+ * 处理多引用跳转
+ * - 滚动到最小编号的片段（第一个引用）
+ * - 高亮所有引用的片段
+ * - 3秒后自动取消高亮
+ */
+function scrollToChunks(ids: number[]) {
+  if (!ids || ids.length === 0) return;
+  // 过滤无效编号
+  const validIds = ids.filter((id) => !Number.isNaN(id) && id > 0);
+  if (validIds.length === 0) return;
+  
+  // 清除之前的高亮清除定时器
+  if (highlightClearTimer) {
+    clearTimeout(highlightClearTimer);
+    highlightClearTimer = null;
+  }
+  
+  // 找到最小编号（第一个引用位置）
+  const minId = Math.min(...validIds);
+  
+  // 设置高亮数组（所有引用编号）
+  highlightChunks.value = validIds;
+  
+  // 滚动到最小编号的位置
+  textViewerRef.value?.scrollToChunk(minId);
+  
+  // 3秒后自动取消高亮
+  highlightClearTimer = window.setTimeout(() => {
+    highlightChunks.value = [];
+    highlightClearTimer = null;
+  }, 3000);
+}
+
+// 生成总结和关键点
+async function generateSummary() {
+  if (!chunks.value.length) return;
+  summaryLoading.value = true;
+  summaryError.value = "";
+
+  const userMessage = `请基于以下文档片段生成摘要和关键点，严格输出 JSON：
+片段数量：${chunks.value.length}
+------------
+${chunks.value.map((c, i) => `#${i + 1}: ${c}`).join("\n------------\n")}
+`;
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: userMessage }
+  ];
+
+  try {
+    let streamed = "";
+    const res = await streamDeepSeekAPI(
+      messages,
+      false,
+      (partial: string) => {
+        streamed += partial;
+      }
+    );
+    const content = res?.content;
+    console.log("content====>", content);
+    const parsed = JSON.parse(content);
+    if (parsed?.summary && Array.isArray(parsed?.key_points)) {
+      summary.value = {
+        summary: parsed.summary,
+        key_points: parsed.key_points
+      };
+    } else {
+      summaryError.value = "模型返回格式不符合预期，请重试。";
+    }
+  } catch (e: any) {
+    console.error("[Summary] 生成摘要失败:", e);
+    summaryError.value = e?.message || "生成摘要失败";
+  } finally {
+    summaryLoading.value = false;
+  }
+}
+</script>
+
+<style scoped>
+.page {
+  min-height: 100vh;
+  padding: 48px 20px 64px;
+  background: #F7F8FF;
+  color: #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-sizing: border-box;
+}
+
+.hero {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+  position: relative;
+}
+
+.hero-content {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.98) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 20px;
+  box-shadow: 
+    0 8px 32px rgba(79, 70, 229, 0.1),
+    0 0 0 1px rgba(99, 102, 241, 0.05) inset;
+  padding: 20px 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 背景装饰效果 */
+.hero-content::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -10%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hero-content::after {
+  content: '';
+  position: absolute;
+  bottom: -30%;
+  left: -5%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.06) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hero-header {
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.12));
+  color: #6366f1;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  margin: 0 0 12px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.tag:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.18));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+.tag-icon {
+  font-size: 14px;
+  filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.3));
+}
+
+h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.3px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #1e2239 0%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.3;
+}
+
+.hero-upload {
+  position: relative;
+  z-index: 1;
+}
+
+.hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.status-section {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.status-card {
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 12px 40px rgba(79, 70, 229, 0.08);
+}
+
+.status-card.error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.status-indicator.loading {
+  background: #3b82f6;
+}
+
+.status-indicator.error {
+  background: #ef4444;
+  animation: none;
+}
+
+.error-text {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: stretch; /* 让所有卡片高度一致 */
+}
+
+.card {
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(79, 70, 229, 0.08);
+  padding: 20px 24px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: #1E2239;
+  margin-bottom: 16px;
+  font-size: 16px;
+}
+
+.text-card-title {
+  font-size: 16px;
+  color: #fff;
+  font-weight: 700;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot.blue {
+  background: #6366f1;
+}
+
+.dot.purple {
+  background: #6366f1;
+}
+
+.count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #6366f1;
+  font-weight: 500;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.12);
+  border-radius: 999px;
+}
+
+.summary-card {
+  min-height: 400px;
+  max-height: 700px;
+  height: 100%; /* 填充网格单元格 */
+  background: linear-gradient(135deg, rgba(236, 239, 255, 0.98), rgba(225, 234, 255, 0.95), rgba(219, 234, 254, 0.92));
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  box-shadow: 0 12px 40px rgba(79, 70, 229, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.summary-card .card-header {
+  flex-shrink: 0;
+}
+
+.summary-card .summary-content,
+.summary-card .summary-loading,
+.summary-card .summary-error,
+.summary-card .summary-placeholder {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* 摘要卡片滚动条样式 */
+.summary-card .summary-content::-webkit-scrollbar,
+.summary-card .summary-loading::-webkit-scrollbar,
+.summary-card .summary-error::-webkit-scrollbar,
+.summary-card .summary-placeholder::-webkit-scrollbar {
+  width: 6px;
+}
+
+.summary-card .summary-content::-webkit-scrollbar-track,
+.summary-card .summary-loading::-webkit-scrollbar-track,
+.summary-card .summary-error::-webkit-scrollbar-track,
+.summary-card .summary-placeholder::-webkit-scrollbar-track {
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 3px;
+}
+
+.summary-card .summary-content::-webkit-scrollbar-thumb,
+.summary-card .summary-loading::-webkit-scrollbar-thumb,
+.summary-card .summary-error::-webkit-scrollbar-thumb,
+.summary-card .summary-placeholder::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 3px;
+}
+
+.summary-card .summary-content::-webkit-scrollbar-thumb:hover,
+.summary-card .summary-loading::-webkit-scrollbar-thumb:hover,
+.summary-card .summary-error::-webkit-scrollbar-thumb:hover,
+.summary-card .summary-placeholder::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.3);
+}
+
+.summary-loading,
+.summary-error,
+.summary-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #6b7280;
+}
+
+.summary-error {
+  color: #dc2626;
+}
+
+.summary-content h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: #1E2239;
+}
+
+.summary-content h4 {
+  margin: 12px 0 6px;
+  font-size: 16px;
+  color: #1E2239;
+}
+
+.summary-content p {
+  margin: 0 0 10px;
+  line-height: 1.6;
+  color: #1E2239;
+}
+
+.summary-content ul {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #1E2239;
+}
+
+.kp-index {
+  color: #a855f7;
+  margin-right: 6px;
+}
+
+.ref-group {
+  margin: 0 2px;
+}
+
+.ref-link {
+  color: #1E2239;
+  text-decoration: none;
+  margin-right: 4px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  transition: all 0.2s ease;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.ref-link:hover {
+  background: rgba(99, 102, 241, 0.2);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+}
+
+.ref-link:active {
+  transform: translateY(1px);
+}
+
+.text-card {
+  min-height: 400px;
+  max-height: 700px;
+  height: 100%; /* 填充网格单元格 */
+  background: #1E2239;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 40px rgba(79, 70, 229, 0.08);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.text-card .card-header {
+  flex-shrink: 0;
+}
+
+.text-card .text-viewer {
+  flex: 1;
+  min-height: 0;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #e5e7eb;
+  border-top-color: #6366f1;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.empty-state {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.empty-card {
+  padding: 48px 24px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  border-radius: 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 15px;
+  box-shadow: 0 12px 40px rgba(79, 70, 229, 0.08);
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 32px 16px 48px;
+    gap: 20px;
+  }
+
+  .hero-content {
+    padding: 16px 18px;
+  }
+
+  .hero-header {
+    margin-bottom: 14px;
+  }
+
+  .tag {
+    font-size: 10px;
+    padding: 4px 10px;
+    margin-bottom: 10px;
+  }
+
+  h1 {
+    font-size: 20px;
+    letter-spacing: -0.2px;
+  }
+
+  .hint {
+    font-size: 11px;
+    margin-top: 8px;
+  }
+
+  .card {
+    padding: 16px 18px;
+  }
+
+  .summary-card {
+    min-height: 300px;
+    max-height: 500px;
+  }
+
+  .text-card {
+    min-height: 300px;
+    max-height: 500px;
+  }
+
+  .qa-card {
+    min-height: 300px;
+    max-height: 500px;
+  }
+}
+</style>
