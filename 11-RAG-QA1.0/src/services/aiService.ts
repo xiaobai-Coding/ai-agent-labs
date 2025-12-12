@@ -20,7 +20,13 @@ type StreamResult = {
   tool_calls?: any[];
   raw?: string;
 };
-
+/**
+ * 流式输出 JSON 里的 result 字段
+ * @param userMessages 用户消息
+ * @param _showDebugReasoning 是否显示推理内容
+ * @param onPartialResponse 部分响应回调
+ * @returns StreamResult
+ */
 export const streamDeepSeekAPI = async (
   userMessages: any[],
   _showDebugReasoning: boolean = false, // 保留签名，暂未使用
@@ -68,24 +74,8 @@ export const streamDeepSeekAPI = async (
   
     // 用来存整段 JSON 文本（模型最终输出的完整 JSON 字符串）
     let fullJsonText = "";
-  
-    // 用来收集 reasoning_content（如果模型有单独的推理流）
-    let aggregatedDebug = "";
-  
-    // 用来收集工具调用的增量信息，全部的工具调用的集合（对象）
-    const toolCallBuffers: Record<
-      number,
-      {
-        id?: string;
-        type?: string;
-        function?: { name?: string; arguments: string };
-      }
-    > = {};
-  
-    let hasToolCall = false; // 是否触发了工具调用
-  
     // 🔥 用你之前写好的 result 字段状态机，只对 `"result": "..."` 内部字符调用 onPartialResponse
-    const resultStreamer = createResultStreamer(onPartialResponse);
+    const resultStreamer = onPartialResponse ? createResultStreamer(onPartialResponse) : null;
   
     while (!done) {
       const { value, done: readerDone } = await reader.read();
@@ -113,7 +103,7 @@ export const streamDeepSeekAPI = async (
         try {
           const parsed = JSON.parse(dataPayload);
           const delta = parsed.choices?.[0]?.delta;
-          // console.log("delta:", delta);
+          console.log("delta:", delta);
           if (!delta) continue;
   
           // 1️⃣ content：是 JSON 字符串的碎片
@@ -122,19 +112,31 @@ export const streamDeepSeekAPI = async (
             // ① 整体 JSON 文本累积，用于最后 JSON.parse
             fullJsonText += chunk;
   
-            // ② 把这一小块交给 resultStreamer，
-            //    内部只会在解析到 "result": "..." 里的字符时调用 onPartialResponse
-            resultStreamer.handleChunk(chunk);
+            // ② 如果有回调，优先尝试通过 resultStreamer 解析 "result" 字段
+            //    如果模型返回的 JSON 不包含 "result" 字段，resultStreamer 不会调用回调
+            //    此时直接调用回调以确保实时流式输出
+            if (resultStreamer) {
+              resultStreamer.handleChunk(chunk);
+            }
+            // 直接调用回调以确保实时流式输出（适用于模型返回的 JSON 不包含 "result" 字段的情况）
+            // 注意：如果模型返回的 JSON 包含 "result" 字段，resultStreamer 也会调用回调，可能会重复调用
+            // 但这样可以确保无论哪种情况都能实时看到流式输出
+            if (onPartialResponse) {
+              onPartialResponse(chunk);
+            }
           }
         } catch (err) {
           console.error("[AI Service] 流式数据解析失败:", err);
         }
       }
     }
+    
+    // 在流处理完成后调用 finalize
+    if (resultStreamer) {
+      resultStreamer.finalize();
+    }
+    
     console.log("最终json文本fullJsonText:", fullJsonText);
-    // 告诉 r// ---- 4️⃣ 解析最终 JSON ----
-    let finalContent = ""; // 最终的主内容
-    let debug_reasoning: string | null = null; // 最终的推理内容
 
   
  
@@ -142,6 +144,8 @@ export const streamDeepSeekAPI = async (
   
     // ---- 返回统一结构 ----
     return {
-      content: fullJsonText
+      message: { role: "assistant", content: fullJsonText },
+      content: fullJsonText,
+      debug_reasoning: null
     }
   };

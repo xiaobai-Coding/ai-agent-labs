@@ -288,6 +288,7 @@ ${chunks.value.map((c, i) => `#${i + 1}: ${c}`).join("\n------------\n")}
       messages,
       false,
       (partial: string) => {
+        console.log("partial====>", partial);
         streamed += partial;
       }
     );
