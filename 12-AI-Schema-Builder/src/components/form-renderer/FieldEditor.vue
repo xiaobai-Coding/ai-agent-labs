@@ -1,12 +1,9 @@
 <template>
-  <NDrawer v-model:show="visible" :width="380" placement="right">
-    <NDrawerContent :title="`正在编辑字段 ${selectedFieldKey}`">
+  <NDrawer :show="show" :width="380" placement="right" @update:show="(val) => emit('update:show', val)">
+    <NDrawerContent :title="`正在编辑字段 ${fieldKey}`">
       <NForm label-placement="top" :show-require-mark="false" :model="formState">
-        <NFormItem label="标题 (title)">
-          <NInput v-model:value="formState.title" placeholder="字段标题" @update:value="applyChanges" />
-        </NFormItem>
-        <NFormItem label="描述 (description)">
-          <NInput v-model:value="formState.description" placeholder="字段描述" @update:value="applyChanges" />
+        <NFormItem label="标题 (label)">
+          <NInput v-model:value="formState.label" placeholder="字段标题" @update:value="applyChanges" />
         </NFormItem>
         <NFormItem label="占位符 (placeholder)">
           <NInput v-model:value="formState.placeholder" placeholder="占位提示" @update:value="applyChanges" />
@@ -18,88 +15,95 @@
           <NSwitch v-model:value="formState.required" @update:value="applyChanges" />
         </NFormItem>
       </NForm>
+      <template #footer>
+        <NSpace justify="space-between" style="width: 100%">
+          <NButton :disabled="!canReset" @click="handleReset">重置本字段</NButton>
+          <NSpace>
+            <NButton @click="handleCancel">取消</NButton>
+            <NButton type="primary" @click="handleConfirm">完成</NButton>
+          </NSpace>
+        </NSpace>
+      </template>
     </NDrawerContent>
   </NDrawer>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
-import { NDrawer, NDrawerContent, NForm, NFormItem, NInput, NSwitch } from 'naive-ui'
+import { reactive, watch, computed } from 'vue'
+import { NDrawer, NDrawerContent, NForm, NFormItem, NInput, NSwitch, NButton, NSpace } from 'naive-ui'
 
 const props = defineProps<{
-  schema: any
-  selectedFieldKey: string
   show: boolean
+  fieldKey: string | null
+  schema: any
+  backupField: any
 }>()
 
 const emit = defineEmits<{
   (e: 'update:show', value: boolean): void
+  (e: 'confirm'): void
+  (e: 'cancel'): void
+  (e: 'reset'): void
   (e: 'update-schema', value: any): void
 }>()
 
-const visible = computed({
-  get: () => props.show,
-  set: (val) => emit('update:show', val)
-})
-
 const formState = reactive({
-  title: '',
-  description: '',
+  label: '',
   placeholder: '',
   default: '',
   required: false
 })
 
+const findField = () => {
+  return props.schema?.fields?.find((f: any) => f.name === props.fieldKey)
+}
+
 watch(
-  () => [props.selectedFieldKey, props.schema],
+  () => [props.fieldKey, props.show],
   () => {
-    const key = props.selectedFieldKey
-    const fieldSchema = props.schema?.properties?.[key]
-    if (!fieldSchema) return
-    formState.title = fieldSchema.title ?? ''
-    formState.description = fieldSchema.description ?? ''
-    formState.placeholder = fieldSchema.placeholder ?? ''
-    formState.default = fieldSchema.default ?? ''
-    const requiredList: string[] = Array.isArray(props.schema?.required) ? props.schema.required : []
-    formState.required = requiredList.includes(key)
+    if (!props.show || !props.fieldKey) return
+    const field = findField()
+    if (!field) return
+    formState.label = field.label ?? ''
+    formState.placeholder = field.placeholder ?? ''
+    formState.default = field.default ?? ''
+    formState.required = field.required === true
   },
-  { immediate: true, deep: false }
+  { immediate: true }
 )
 
 const applyChanges = () => {
-  const key = props.selectedFieldKey
-  if (!props.schema?.properties?.[key]) return
+  const fieldIndex = props.schema?.fields?.findIndex((f: any) => f.name === props.fieldKey)
+  if (fieldIndex === -1 || fieldIndex === undefined) return
+
+  const nextFields = [...props.schema.fields]
+  nextFields[fieldIndex] = {
+    ...nextFields[fieldIndex],
+    label: formState.label,
+    placeholder: formState.placeholder,
+    default: formState.default,
+    required: formState.required
+  }
 
   const nextSchema = {
     ...props.schema,
-    properties: {
-      ...props.schema.properties,
-      [key]: {
-        ...props.schema.properties[key],
-        title: formState.title,
-        description: formState.description,
-        placeholder: formState.placeholder,
-        default: formState.default
-      }
-    }
-  }
-
-  const requiredList: string[] = Array.isArray(props.schema.required) ? [...props.schema.required] : []
-  const existsIndex = requiredList.indexOf(key)
-  if (formState.required && existsIndex === -1) {
-    requiredList.push(key)
-  }
-  if (!formState.required && existsIndex !== -1) {
-    requiredList.splice(existsIndex, 1)
-  }
-
-  if (requiredList.length > 0) {
-    nextSchema.required = requiredList
-  } else {
-    delete nextSchema.required
+    fields: nextFields
   }
 
   emit('update-schema', nextSchema)
 }
-</script>
 
+const handleConfirm = () => {
+  emit('confirm')
+}
+
+const handleCancel = () => {
+  emit('cancel')
+}
+
+const canReset = computed(() => !!props.fieldKey && !!props.backupField)
+
+const handleReset = () => {
+  emit('reset')
+}
+</script>

@@ -1,7 +1,7 @@
 <template>
   <NInput
     v-model:value="localValue"
-    :placeholder="field.label || field.name"
+    :placeholder="field.placeholder || field.label || field.name"
     clearable
   />
 </template>
@@ -16,6 +16,7 @@ interface SchemaField {
   name: string
   label?: string
   type: string
+  placeholder?: string
 }
 
 const props = defineProps<{

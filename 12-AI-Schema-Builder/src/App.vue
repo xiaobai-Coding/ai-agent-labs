@@ -65,66 +65,46 @@ const defaultSchema = {
 const schemaText = ref<string>('') // 用于编辑的 Schema 文本
 const schema = ref<any>(null) // 用于渲染的 Schema
 const parseError = ref<string>('') // 解析错误
-const selectedFieldKey = ref<string>('') // 当前选中的字段
+const selectedFieldKey = ref<string | null>(null) // 当前选中的字段
 const showFieldEditor = ref(false) // 控制字段编辑器抽屉
+const backupField = ref<any>(null) // 打开 Drawer 时备份字段
+
+function deepClone<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj))
+}
 
 
 // 监听文本变化，尝试解析 JSON；失败时保留旧 Schema，并提示错误
 watch(
   schemaText,
   (val) => {
+    if (!val.trim()) return 
     validateAndApplySchema(val)
   }
 )
-// 验证并应用 Schema
+// 验证并应用 Schema（基于 fields 结构）
 function validateAndApplySchema(text: string) {
   try {
     const parsed = JSON.parse(text)
 
-    // 优先支持 JSON Schema properties
-    if (parsed && typeof parsed === 'object' && parsed.properties) {
-      schema.value = parsed
-      parseError.value = ''
-      return
+    // 基础结构校验
+    if (!parsed.title || !Array.isArray(parsed.fields)) {
+      throw new Error('Schema 必须包含 title 和 fields')
     }
 
-    // 兼容旧的 fields 结构，转换为 properties
-    if (Array.isArray(parsed.fields)) {
-      const properties: Record<string, any> = {}
-      const requiredList: string[] = []
-      parsed.fields.forEach((field: any, index: number) => {
-        if (!field.name) {
-          throw new Error(`第 ${index + 1} 个字段缺少 name`)
-        }
-        if (!field.type) {
-          throw new Error(`字段 ${field.name} 缺少 type`)
-        }
-        properties[field.name] = {
-          title: field.label ?? field.name,
-          type: field.type,
-          enum: field.enum,
-          default: field.default,
-          placeholder: field.placeholder
-        }
-        if (field.required) {
-          requiredList.push(field.name)
-        }
-      })
-      const nextSchema = {
-        ...parsed,
-        properties
+    // 字段校验
+    parsed.fields.forEach((field: any, index: number) => {
+      if (!field.name) {
+        throw new Error(`第 ${index + 1} 个字段缺少 name`)
       }
-      if (requiredList.length > 0) {
-        nextSchema.required = requiredList
+      if (!field.type) {
+        throw new Error(`字段 ${field.name} 缺少 type`)
       }
-      schema.value = nextSchema
-      parseError.value = ''
-      return
-    }
+    })
 
-    throw new Error('Schema 需要包含 properties 对象')
+    schema.value = parsed
+    parseError.value = ''
   } catch (err: any) {
-    // ❌ 校验失败
     parseError.value = err.message
   }
 }
@@ -164,13 +144,47 @@ function exportSchema() {
   URL.revokeObjectURL(url)
 }
 
-function handleSelectField(key: string) {
+function openFieldEditor(key: string) {
   selectedFieldKey.value = key
+  const field = schema.value?.fields?.find((f: any) => f.name === key)
+  backupField.value = field ? deepClone(field) : null
   showFieldEditor.value = true
 }
 
 function handleUpdateSchema(next: any) {
   schema.value = next
+  schemaText.value = JSON.stringify(next, null, 2)
+}
+
+function onConfirm() {
+  showFieldEditor.value = false
+  backupField.value = null
+}
+
+function onCancel() {
+  if (selectedFieldKey.value && backupField.value && schema.value?.fields) {
+    const fieldIndex = schema.value.fields.findIndex((f: any) => f.name === selectedFieldKey.value)
+    if (fieldIndex !== -1) {
+      const nextFields = [...schema.value.fields]
+      nextFields[fieldIndex] = deepClone(backupField.value)
+      schema.value = { ...schema.value, fields: nextFields }
+      schemaText.value = JSON.stringify(schema.value, null, 2)
+    }
+  }
+  showFieldEditor.value = false
+  backupField.value = null
+}
+
+function onReset() {
+  if (selectedFieldKey.value && backupField.value && schema.value?.fields) {
+    const fieldIndex = schema.value.fields.findIndex((f: any) => f.name === selectedFieldKey.value)
+    if (fieldIndex !== -1) {
+      const nextFields = [...schema.value.fields]
+      nextFields[fieldIndex] = deepClone(backupField.value)
+      schema.value = { ...schema.value, fields: nextFields }
+      schemaText.value = JSON.stringify(schema.value, null, 2)
+    }
+  }
 }
 </script>
 
@@ -233,7 +247,7 @@ function handleUpdateSchema(next: any) {
               v-if="schema"
               :schema="schema"
               :selected-field-key="selectedFieldKey"
-              @select-field="handleSelectField"
+              @select-field="openFieldEditor"
             />
             <p v-else class="placeholder">请先提供合法的 Schema JSON</p>
           </div>
@@ -244,9 +258,13 @@ function handleUpdateSchema(next: any) {
         v-if="schema && selectedFieldKey"
         :show="showFieldEditor"
         :schema="schema"
-        :selected-field-key="selectedFieldKey"
+        :field-key="selectedFieldKey"
+        :backup-field="backupField"
         @update:show="(val) => (showFieldEditor = val)"
         @update-schema="handleUpdateSchema"
+        @confirm="onConfirm"
+        @cancel="onCancel"
+        @reset="onReset"
       />
     </main>
   </NConfigProvider>

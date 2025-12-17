@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { NForm, NFormItem } from 'naive-ui'
 // @ts-ignore vue shim
 import FieldRenderer from './FieldRenderer.vue'
@@ -37,31 +37,23 @@ const emit = defineEmits<{
 
 const normalizedFields = computed(() => {
   if (!props.schema) return []
-  // 优先使用 JSON Schema properties
-  if (props.schema.properties) {
-    const requiredKeys: string[] = Array.isArray(props.schema.required) ? props.schema.required : []
-    return Object.entries(props.schema.properties).map(([key, value]: [string, any]) => ({
-      name: key,
-      label: value?.title ?? key,
-      type: value?.type ?? 'string',
-      required: requiredKeys.includes(key),
-      default: value?.default ?? null,
-      enum: value?.enum,
-      placeholder: value?.placeholder
-    }))
-  }
-  // 兼容旧的 fields 数组结构
   if (Array.isArray(props.schema.fields)) {
     return props.schema.fields
   }
   return []
 })
 
-const formModel = reactive<Record<string, Primitive>>(
-  normalizedFields.value.reduce((acc, field) => {
-    acc[field.name] = field.default ?? null
-    return acc
-  }, {} as Record<string, Primitive>)
+const formModel = reactive<Record<string, Primitive>>({})
+
+watch(
+  normalizedFields,
+  (fields) => {
+    fields.forEach((field: any) => {
+      // 始终同步 default 值到 formModel
+      formModel[field.name] = field.default ?? null
+    })
+  },
+  { immediate: true, deep: true }
 )
 
 const onSelect = (key: string) => {
