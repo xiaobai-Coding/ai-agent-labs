@@ -9,7 +9,8 @@ import FormRenderer from './components/form-renderer/FormRenderer.vue'
 // @ts-ignore vue shim
 import FieldEditor from './components/form-renderer/FieldEditor.vue'
 import { callDeepSeekAPI } from './services/aiService'
-
+import { ClassifierPrompt, getSchemaPrompt } from './prompts/schemaPrompt';
+import { applyPatch } from './utils/applyPatch'
 const themeOverrides = {
   common: {
     primaryColor: '#6366f1',
@@ -68,6 +69,7 @@ const parseError = ref<string>('') // 解析错误
 const selectedFieldKey = ref<string | null>(null) // 当前选中的字段
 const showFieldEditor = ref(false) // 控制字段编辑器抽屉
 const backupField = ref<any>(null) // 打开 Drawer 时备份字段
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj))
@@ -108,18 +110,40 @@ function validateAndApplySchema(text: string) {
     parseError.value = err.message
   }
 }
-// 从 AI 生成 Schema，并回填到唯一数据源
+// 从 AI 生成用户意图，并根据意图生成 Schema
 async function handleGenerate(userPrompt: string) {
   try {
-    const generated = await callDeepSeekAPI(userPrompt)
-    schema.value = generated
-    schemaText.value = JSON.stringify(generated, null, 2)
-    parseError.value = ''
+    const classification = await callDeepSeekAPI(userPrompt, ClassifierPrompt)
+    await generateSchema(userPrompt, classification.intent)
   } catch (err: any) {
     parseError.value = err.message
   }
 }
 
+// 根据用户意图生成 Schema（或对现有 Schema 做 PATCH）
+const generateSchema = async (userPrompt: string, intent: string) => {
+  try {
+    const result = await callDeepSeekAPI(userPrompt, getSchemaPrompt(intent))
+
+    if (intent === 'PATCH_UPDATE') {
+      if (!schema.value) {
+        throw new Error('当前没有可用于 PATCH 的 Schema')
+      }
+      const patched = applyPatch(schema.value, result)
+      schema.value = patched
+      schemaText.value = JSON.stringify(patched, null, 2)
+    } else {
+      schema.value = result
+      schemaText.value = JSON.stringify(result, null, 2)
+    }
+
+    parseError.value = ''
+  } catch (err: any) {
+    console.error('生成 Schema 失败', err)
+    parseError.value = err.message
+    throw err
+  }
+}
 // 复制当前 schema
 async function copySchema() {
   if (!schema.value) return
@@ -186,6 +210,31 @@ function onReset() {
     }
   }
 }
+
+function triggerFileImport() {
+  fileInputRef.value?.click()
+}
+
+function handleFileSelect(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+  
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const text = e.target?.result as string
+    if (text) {
+      schemaText.value = text
+    }
+  }
+  reader.onerror = () => {
+    parseError.value = '文件读取失败'
+  }
+  reader.readAsText(file)
+  
+  // 重置 input，允许重复选择同一文件
+  target.value = ''
+}
 </script>
 
 <template>
@@ -203,6 +252,22 @@ function onReset() {
               <h2>可编辑的 Schema 文本</h2>
             </div>
           <div class="actions">
+            <NButton
+              size="tiny"
+              quaternary
+              type="primary"
+              class="schema-action-btn"
+              @click="triggerFileImport"
+            >
+              导入 JSON
+            </NButton>
+            <input
+              ref="fileInputRef"
+              type="file"
+              accept=".json"
+              style="display: none"
+              @change="handleFileSelect"
+            />
             <NButton
               size="tiny"
               quaternary
@@ -266,6 +331,7 @@ function onReset() {
         @cancel="onCancel"
         @reset="onReset"
       />
+
     </main>
   </NConfigProvider>
 </template>

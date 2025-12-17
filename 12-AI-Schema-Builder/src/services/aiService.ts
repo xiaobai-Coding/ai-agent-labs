@@ -1,5 +1,3 @@
-import { SCHEMA_SYSTEM_PROMPT } from "../prompts/schemaPrompt";
-
 // 从环境变量中读取配置
 const getConfig = () => ({
   apiKey: import.meta.env.VITE_AI_API_KEY || "",
@@ -16,9 +14,9 @@ const config = getConfig();
  * @param userPrompt 用户输入的表单需求
  * @returns JSON Schema
  */
-export async function callDeepSeekAPI(userPrompt: string) {
+export async function callDeepSeekAPI(userPrompt: string, prompt: string | null) {
   const messages = [
-    { role: "system", content: SCHEMA_SYSTEM_PROMPT },
+    { role: "system", content: prompt || '' },
     { role: "user", content: userPrompt }
   ];
 
