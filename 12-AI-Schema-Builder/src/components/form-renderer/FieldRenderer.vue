@@ -1,11 +1,9 @@
 <template>
-  <div class="field-shell" @click.stop>
-    <component
-      :is="componentType"
-      v-model="modelValue"
-      :field="field"
-    />
-  </div>
+  <component
+    :is="componentType"
+    v-model="modelValue"
+    :field="field"
+  />
 </template>
 
 <script setup lang="ts">
@@ -50,11 +48,4 @@ const modelValue = computed({
   set: (val) => emit('update:modelValue', val)
 })
 </script>
-
-<style scoped>
-.field-shell {
-  width: 100%;
-}
-</style>
-
 

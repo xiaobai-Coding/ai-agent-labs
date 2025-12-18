@@ -197,7 +197,10 @@ const PATCH_UPDATE_PROMPT = `
 【禁止行为】
 - 返回完整 Schema
 - 输出任何解释性文字
-- 输出非 JSON 内容
+- 输出非 JSON 内容，不要输出任何其他内容
+- 不要输出任何解释性文字
+- 不要输出任何其他内容
+- 不要输出任何其他内容
 `
 // Schema Generator Prompt
 const SCHEMA_GENERATOR_PROMPT = `

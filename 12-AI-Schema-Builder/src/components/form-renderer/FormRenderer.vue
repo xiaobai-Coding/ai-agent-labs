@@ -63,18 +63,14 @@ const onSelect = (key: string) => {
 
 <style scoped>
 .field-item {
-  padding: 4px 8px;
-  margin-bottom: 4px;
   border-radius: 12px;
-  border: 1px solid transparent;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
 }
 
 .field-item.active {
-  border: 1px solid rgba(99, 102, 241, 0.55);
-  background: radial-gradient(circle at 0 0, rgba(129, 140, 248, 0.12), rgba(191, 219, 254, 0.1));
-  box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.25);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 </style>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // @ts-nocheck
 import { ref } from 'vue'
+import { NButton } from 'naive-ui'
 
 const props = defineProps<{
   onGenerate?: (prompt: string) => Promise<any> | void
@@ -40,17 +41,19 @@ const handleGenerate = async () => {
         v-model="userPrompt"
         @keydown.enter.prevent="handleGenerate"
       ></textarea>
-      <button
+      <NButton
         v-if="userPrompt.trim() || loading"
-        class="send-btn"
-        type="button"
+        :class="['send-btn', { 'send-btn--loading': loading }]"
+        type="primary"
+        size="small"
+        circle
         aria-label="生成 Schema"
         :disabled="loading"
         @click="handleGenerate"
       >
-        <span v-if="loading" class="spinner"></span>
-        <span v-else>↑</span>
-      </button>
+        <span v-if="!loading">↑</span>
+        <span v-else class="send-spinner"></span>
+      </NButton>
     </div>
   </section>
 </template>
@@ -124,55 +127,66 @@ textarea:focus {
   position: absolute;
   right: 12px;
   bottom: 12px;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #fff;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
+  padding: 0;
+}
+
+.send-btn :deep(.n-button) {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(99, 102, 241, 0.25);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10px 24px rgba(99, 102, 241, 0.25);
-  transition: transform 0.12s ease, box-shadow 0.2s ease;
-  border: none;
+  font-size: 20px;
+  font-weight: 700;
 }
 
-.send-btn:hover {
+.send-btn :deep(.n-button:not(.n-button--disabled)):hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 30px rgba(99, 102, 241, 0.28);
 }
 
-.send-btn:active {
+.send-btn :deep(.n-button:not(.n-button--disabled)):active {
   transform: translateY(0);
   box-shadow: 0 8px 18px rgba(99, 102, 241, 0.22);
 }
 
-.send-btn:disabled {
-  opacity: 0.8;
-  cursor: default;
+.send-btn--loading :deep(.n-button) {
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.7), 0 0 0 6px rgba(99, 102, 241, 0.28);
+  animation: send-pulse 1.1s ease-out infinite;
 }
 
-.spinner {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
-  animation: spin 0.9s linear infinite;
+.send-spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 2px solid rgba(248, 250, 252, 0.4);
+  border-top-color: #ffffff;
+  border-right-color: #e5e7eb;
+  animation: send-spin 0.7s linear infinite;
 }
 
-@keyframes spin {
+.input-wrap {
+  position: relative;
+}
+
+@keyframes send-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.input-wrap {
-  position: relative;
+@keyframes send-pulse {
+  0% {
+    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.7), 0 0 0 4px rgba(99, 102, 241, 0.1);
+  }
+  70% {
+    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.2), 0 0 0 10px rgba(129, 140, 248, 0.0);
+  }
+  100% {
+    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.2), 0 0 0 4px rgba(129, 140, 248, 0.0);
+  }
 }
 
 @media (max-width: 768px) {

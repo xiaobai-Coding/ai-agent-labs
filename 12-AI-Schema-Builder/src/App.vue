@@ -8,6 +8,8 @@ import PromptInput from './components/PromptInput.vue'
 import FormRenderer from './components/form-renderer/FormRenderer.vue'
 // @ts-ignore vue shim
 import FieldEditor from './components/form-renderer/FieldEditor.vue'
+// @ts-ignore vue shim
+import PatchPreviewModal from './components/PatchPreviewModal.vue'
 import { callDeepSeekAPI } from './services/aiService'
 import { ClassifierPrompt, getSchemaPrompt } from './prompts/schemaPrompt';
 import { applyPatch } from './utils/applyPatch'
@@ -70,6 +72,8 @@ const selectedFieldKey = ref<string | null>(null) // 当前选中的字段
 const showFieldEditor = ref(false) // 控制字段编辑器抽屉
 const backupField = ref<any>(null) // 打开 Drawer 时备份字段
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const pendingPatch = ref<any>(null) // 待确认的 patch
+const isPatchModalOpen = ref(false) // 控制 Patch Preview Modal 显示
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj))
@@ -129,9 +133,8 @@ const generateSchema = async (userPrompt: string, intent: string) => {
       if (!schema.value) {
         throw new Error('当前没有可用于 PATCH 的 Schema')
       }
-      const patched = applyPatch(schema.value, result)
-      schema.value = patched
-      schemaText.value = JSON.stringify(patched, null, 2)
+      pendingPatch.value = result
+      isPatchModalOpen.value = true
     } else {
       schema.value = result
       schemaText.value = JSON.stringify(result, null, 2)
@@ -143,6 +146,24 @@ const generateSchema = async (userPrompt: string, intent: string) => {
     parseError.value = err.message
     throw err
   }
+}
+
+function confirmPatch() {
+  if (!pendingPatch.value || !schema.value) return
+  try {
+    const patched = applyPatch(schema.value, pendingPatch.value)
+    schema.value = patched
+    schemaText.value = JSON.stringify(patched, null, 2)
+    pendingPatch.value = null
+    parseError.value = ''
+  } catch (err: any) {
+    console.error('应用 Patch 失败', err)
+    parseError.value = err.message
+  }
+}
+
+function cancelPatch() {
+  pendingPatch.value = null
 }
 // 复制当前 schema
 async function copySchema() {
@@ -249,7 +270,7 @@ function handleFileSelect(event: Event) {
           <div class="panel-header">
             <div>
               <p class="eyebrow">Schema JSON</p>
-              <h2>可编辑的 Schema 文本</h2>
+              <h2 class="text-overflow-ellipsis">可编辑的 Schema 文本 </h2>
             </div>
           <div class="actions">
             <NButton
@@ -291,8 +312,8 @@ function handleFileSelect(event: Event) {
           <NInput
             v-model:value="schemaText"
             type="textarea"
-            :rows="18"
             placeholder="粘贴或编辑 JSON Schema"
+            class="schema-input"
           />
           <NAlert v-if="parseError" type="error" class="alert">
             JSON 解析错误：{{ parseError }}
@@ -303,7 +324,7 @@ function handleFileSelect(event: Event) {
           <div class="panel-header">
             <div>
               <p class="eyebrow">实时预览</p>
-              <h2>{{ schema?.title || '表单预览' }}</h2>
+              <h2 class="text-overflow-ellipsis">{{ schema?.title || '表单预览' }}</h2>
             </div>
             <span class="hint">Schema 为唯一数据源</span>
           </div>
@@ -330,6 +351,15 @@ function handleFileSelect(event: Event) {
         @confirm="onConfirm"
         @cancel="onCancel"
         @reset="onReset"
+      />
+
+      <PatchPreviewModal
+        :show="isPatchModalOpen"
+        :patch="pendingPatch"
+        :schema="schema"
+        @update:show="(val) => (isPatchModalOpen = val)"
+        @confirm="confirmPatch"
+        @cancel="cancelPatch"
       />
 
     </main>
@@ -405,11 +435,11 @@ h2 {
 }
 
 .editor-panel {
-  min-height: 420px;
+  height: 70vh;
 }
 
 .form-panel {
-  min-height: 420px;
+  height: 70vh;
 }
 
 .grid {
@@ -429,6 +459,21 @@ h2 {
   overflow: auto;
 }
 
+.schema-input {
+  height: 100%;
+}
+
+.schema-input :deep(textarea) {
+  height: 100% !important;
+  min-height: 280px;
+  border-radius: 12px;
+  font-family: 'SF Mono', ui-monospace, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+  font-size: 13px;
+}
+
+
+
 .alert {
   margin-top: 4px;
 }
@@ -439,8 +484,15 @@ h2 {
 }
 
 @media (max-width: 900px) {
-  .layout {
+  .grid {
     grid-template-columns: 1fr;
   }
+}
+/* 文本溢出省略 */
+.text-overflow-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
 }
 </style>
