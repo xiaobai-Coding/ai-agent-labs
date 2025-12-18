@@ -220,7 +220,7 @@ function handleCancel() {
       <div class="modal-footer">
         <button class="btn btn-ghost" @click="handleCancel">取消</button>
         <button class="btn btn-primary" @click="handleConfirm">
-          确认修改
+          应用修改
         </button>
       </div>
     </div>

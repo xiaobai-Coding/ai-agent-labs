@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // @ts-nocheck
 import { ref, watch } from 'vue'
-import { NConfigProvider, NInput, NAlert, NButton } from 'naive-ui'
+import { NConfigProvider, NInput, NAlert, NButton, createDiscreteApi } from 'naive-ui'
 // @ts-ignore vue shim
 import PromptInput from './components/PromptInput.vue'
 // @ts-ignore vue shim
@@ -75,6 +75,94 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const pendingPatch = ref<any>(null) // 待确认的 patch
 const isPatchModalOpen = ref(false) // 控制 Patch Preview Modal 显示
 
+// A: 字段高亮状态（UI 层副作用，不写入 schema）
+const highlightMap = ref<{ added: string[]; updated: string[] }>({ added: [], updated: [] })
+
+// B: 变更摘要提示（使用 createDiscreteApi 在根组件外创建）
+const { message, dialog } = createDiscreteApi(['message', 'dialog'])
+
+// Patch 历史记录（最多 5 条）
+interface PatchHistoryRecord {
+  id: string
+  timestamp: number
+  summary: string
+  patch: any
+  beforeSchema: any
+  afterSchema: any
+}
+
+const PATCH_HISTORY_KEY = 'ai-schema-builder-patch-history'
+const patchHistory = ref<PatchHistoryRecord[]>([])
+
+// 从 localStorage 恢复历史
+function loadPatchHistory() {
+  try {
+    const stored = localStorage.getItem(PATCH_HISTORY_KEY)
+    if (stored) {
+      patchHistory.value = JSON.parse(stored)
+    }
+  } catch (e) {
+    console.error('加载 Patch 历史失败', e)
+  }
+}
+
+// 保存历史到 localStorage
+function savePatchHistory() {
+  try {
+    localStorage.setItem(PATCH_HISTORY_KEY, JSON.stringify(patchHistory.value))
+  } catch (e) {
+    console.error('保存 Patch 历史失败', e)
+  }
+}
+
+// 添加历史记录
+function addPatchHistory(record: PatchHistoryRecord) {
+  patchHistory.value.unshift(record)
+  if (patchHistory.value.length > 5) {
+    patchHistory.value = patchHistory.value.slice(0, 5)
+  }
+  savePatchHistory()
+}
+
+// 回滚到指定记录
+function rollbackTo(record: PatchHistoryRecord) {
+  // 当存在待确认的 Patch 时，禁止回滚，避免状态冲突
+  if (isPatchModalOpen.value || pendingPatch.value) {
+    message.warning('当前有待确认的 Patch，请先处理后再回滚')
+    return
+  }
+  dialog.warning({
+    title: '确认回滚',
+    content: `确定要回滚到「${record.summary}」之前的状态吗？`,
+    positiveText: '确认回滚',
+    negativeText: '取消',
+    positiveButtonProps: {
+      type: 'primary',
+      size: 'small',
+      class: 'rollback-btn'
+    },
+    negativeButtonProps: {
+      quaternary: true,
+      size: 'small'
+    },
+    onPositiveClick: () => {
+      schema.value = deepClone(record.beforeSchema)
+      schemaText.value = JSON.stringify(record.beforeSchema, null, 2)
+      // 清空当前状态
+      pendingPatch.value = null
+      isPatchModalOpen.value = false
+      highlightMap.value = { added: [], updated: [] }
+      selectedFieldKey.value = null
+      showFieldEditor.value = false
+      backupField.value = null
+      message.success('已回滚到之前的状态')
+    }
+  })
+}
+
+// 页面初始化时加载历史
+loadPatchHistory()
+
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj))
 }
@@ -84,7 +172,7 @@ function deepClone<T>(obj: T): T {
 watch(
   schemaText,
   (val) => {
-    if (!val.trim()) return 
+    if (!val.trim()) return
     validateAndApplySchema(val)
   }
 )
@@ -109,6 +197,11 @@ function validateAndApplySchema(text: string) {
     })
 
     schema.value = parsed
+    // 手动编辑 Schema 时，清理与字段选择/高亮相关的 UI 状态
+    selectedFieldKey.value = null
+    showFieldEditor.value = false
+    backupField.value = null
+    highlightMap.value = { added: [], updated: [] }
     parseError.value = ''
   } catch (err: any) {
     parseError.value = err.message
@@ -116,6 +209,11 @@ function validateAndApplySchema(text: string) {
 }
 // 从 AI 生成用户意图，并根据意图生成 Schema
 async function handleGenerate(userPrompt: string) {
+  // 当存在未处理的 Patch 预览时，禁止再次触发 AI Patch
+  if (isPatchModalOpen.value || pendingPatch.value) {
+    message.warning('当前有待确认的 Patch，请先处理后再继续操作')
+    return
+  }
   try {
     const classification = await callDeepSeekAPI(userPrompt, ClassifierPrompt)
     await generateSchema(userPrompt, classification.intent)
@@ -127,17 +225,36 @@ async function handleGenerate(userPrompt: string) {
 // 根据用户意图生成 Schema（或对现有 Schema 做 PATCH）
 const generateSchema = async (userPrompt: string, intent: string) => {
   try {
-    const result = await callDeepSeekAPI(userPrompt, getSchemaPrompt(intent))
+    let result: any
 
     if (intent === 'PATCH_UPDATE') {
       if (!schema.value) {
         throw new Error('当前没有可用于 PATCH 的 Schema')
       }
+      // 按 PATCH_UPDATE_PROMPT 约定，将 current_schema 与 user_instruction 作为两部分输入
+      const patchInput = `
+current_schema:
+${JSON.stringify(schema.value, null, 2)}
+
+user_instruction:
+${userPrompt}
+`.trim()
+      result = await callDeepSeekAPI(patchInput, getSchemaPrompt(intent))
+    } else {
+      result = await callDeepSeekAPI(userPrompt, getSchemaPrompt(intent))
+    }
+
+    if (intent === 'PATCH_UPDATE') {
       pendingPatch.value = result
       isPatchModalOpen.value = true
     } else {
       schema.value = result
       schemaText.value = JSON.stringify(result, null, 2)
+      // 重新生成 Schema 时，清理选中字段与高亮状态
+      selectedFieldKey.value = null
+      showFieldEditor.value = false
+      backupField.value = null
+      highlightMap.value = { added: [], updated: [] }
     }
 
     parseError.value = ''
@@ -151,10 +268,71 @@ const generateSchema = async (userPrompt: string, intent: string) => {
 function confirmPatch() {
   if (!pendingPatch.value || !schema.value) return
   try {
-    const patched = applyPatch(schema.value, pendingPatch.value)
+    const patch = pendingPatch.value
+    const beforeSchema = deepClone(schema.value) // 保存应用前的快照
+    const patched = applyPatch(schema.value, patch)
+
+    // A: 生成高亮 Map
+    const added: string[] = []
+    const updated: string[] = []
+    if (patch.operations) {
+      patch.operations.forEach((op: any) => {
+        if (op.op === 'add' && op.target === 'field' && op.value?.name) {
+          added.push(op.value.name)
+        } else if (op.op === 'update' && op.target === 'field' && op.name) {
+          updated.push(op.name)
+        }
+      })
+    }
+
+    // B: 生成变更摘要
+    const summaryParts: string[] = []
+    if (added.length > 0) {
+      const labels = added.map((name) => {
+        const field = patched.fields?.find((f: any) => f.name === name)
+        return field?.label || name
+      })
+      summaryParts.push(`新增「${labels.join('、')}」`)
+    }
+    if (updated.length > 0) {
+      const labels = updated.map((name) => {
+        const field = patched.fields?.find((f: any) => f.name === name)
+        return field?.label || name
+      })
+      summaryParts.push(`修改「${labels.join('、')}」`)
+    }
+    const summary = summaryParts.length > 0 ? summaryParts.join('，') : '应用 Patch'
+
+    // 添加到历史记录（仅成功应用的 Patch）
+    addPatchHistory({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+      summary,
+      patch: deepClone(patch),
+      beforeSchema,
+      afterSchema: deepClone(patched)
+    })
+
+    // 更新 schema（唯一合法数据源）
     schema.value = patched
     schemaText.value = JSON.stringify(patched, null, 2)
+    highlightMap.value = { added, updated }
+
+    if (summaryParts.length > 0) {
+      message.success(`已应用修改：${summary}`, { duration: 4000 })
+    }
+
+    // 4秒后清理高亮
+    setTimeout(() => {
+      highlightMap.value = { added: [], updated: [] }
+    }, 4000)
+
+    // 清理 Patch 相关临时状态
     pendingPatch.value = null
+    isPatchModalOpen.value = false
+    selectedFieldKey.value = null
+    showFieldEditor.value = false
+    backupField.value = null
     parseError.value = ''
   } catch (err: any) {
     console.error('应用 Patch 失败', err)
@@ -163,7 +341,9 @@ function confirmPatch() {
 }
 
 function cancelPatch() {
+  // 取消预览时，只清理 Patch 预览相关状态，不影响 schema
   pendingPatch.value = null
+  isPatchModalOpen.value = false
 }
 // 复制当前 schema
 async function copySchema() {
@@ -240,7 +420,7 @@ function handleFileSelect(event: Event) {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   if (!file) return
-  
+
   const reader = new FileReader()
   reader.onload = (e) => {
     const text = e.target?.result as string
@@ -252,7 +432,7 @@ function handleFileSelect(event: Event) {
     parseError.value = '文件读取失败'
   }
   reader.readAsText(file)
-  
+
   // 重置 input，允许重复选择同一文件
   target.value = ''
 }
@@ -265,6 +445,15 @@ function handleFileSelect(event: Event) {
         <PromptInput :on-generate="handleGenerate" @generate="handleGenerate" />
       </section>
 
+      <!-- Patch 历史记录 -->
+      <div v-if="patchHistory.length > 0" class="history-bar">
+        <span class="history-label">修改记录：</span>
+        <span v-for="record in patchHistory" :key="record.id" class="history-tag"
+          :title="`${new Date(record.timestamp).toLocaleString()} · 点击回滚`" @click="rollbackTo(record)">
+          {{ record.summary }}
+        </span>
+      </div>
+
       <section class="grid">
         <div class="panel editor-panel">
           <div class="panel-header">
@@ -272,49 +461,20 @@ function handleFileSelect(event: Event) {
               <p class="eyebrow">Schema JSON</p>
               <h2 class="text-overflow-ellipsis">可编辑的 Schema 文本 </h2>
             </div>
-          <div class="actions">
-            <NButton
-              size="tiny"
-              quaternary
-              type="primary"
-              class="schema-action-btn"
-              @click="triggerFileImport"
-            >
-              导入 JSON
-            </NButton>
-            <input
-              ref="fileInputRef"
-              type="file"
-              accept=".json"
-              style="display: none"
-              @change="handleFileSelect"
-            />
-            <NButton
-              size="tiny"
-              quaternary
-              type="primary"
-              class="schema-action-btn"
-              @click="copySchema"
-            >
-              复制 JSON
-            </NButton>
-            <NButton
-              size="tiny"
-              quaternary
-              type="primary"
-              class="schema-action-btn"
-              @click="exportSchema"
-            >
-              导出 JSON
-            </NButton>
+            <div class="actions">
+              <NButton size="tiny" quaternary type="primary" class="schema-action-btn" @click="triggerFileImport">
+                导入 JSON
+              </NButton>
+              <input ref="fileInputRef" type="file" accept=".json" style="display: none" @change="handleFileSelect" />
+              <NButton size="tiny" quaternary type="primary" class="schema-action-btn" @click="copySchema">
+                复制 JSON
+              </NButton>
+              <NButton size="tiny" quaternary type="primary" class="schema-action-btn" @click="exportSchema">
+                导出 JSON
+              </NButton>
+            </div>
           </div>
-          </div>
-          <NInput
-            v-model:value="schemaText"
-            type="textarea"
-            placeholder="粘贴或编辑 JSON Schema"
-            class="schema-input"
-          />
+          <NInput v-model:value="schemaText" type="textarea" placeholder="粘贴或编辑 JSON Schema" class="schema-input" />
           <NAlert v-if="parseError" type="error" class="alert">
             JSON 解析错误：{{ parseError }}
           </NAlert>
@@ -329,38 +489,19 @@ function handleFileSelect(event: Event) {
             <span class="hint">Schema 为唯一数据源</span>
           </div>
           <div class="form-body">
-            <FormRenderer
-              v-if="schema"
-              :schema="schema"
-              :selected-field-key="selectedFieldKey"
-              @select-field="openFieldEditor"
-            />
+            <FormRenderer v-if="schema" :schema="schema" :selected-field-key="selectedFieldKey"
+              :highlight-map="highlightMap" @select-field="openFieldEditor" />
             <p v-else class="placeholder">请先提供合法的 Schema JSON</p>
           </div>
         </div>
       </section>
 
-      <FieldEditor
-        v-if="schema && selectedFieldKey"
-        :show="showFieldEditor"
-        :schema="schema"
-        :field-key="selectedFieldKey"
-        :backup-field="backupField"
-        @update:show="(val) => (showFieldEditor = val)"
-        @update-schema="handleUpdateSchema"
-        @confirm="onConfirm"
-        @cancel="onCancel"
-        @reset="onReset"
-      />
+      <FieldEditor v-if="schema && selectedFieldKey" :show="showFieldEditor" :schema="schema"
+        :field-key="selectedFieldKey" :backup-field="backupField" @update:show="(val) => (showFieldEditor = val)"
+        @update-schema="handleUpdateSchema" @confirm="onConfirm" @cancel="onCancel" @reset="onReset" />
 
-      <PatchPreviewModal
-        :show="isPatchModalOpen"
-        :patch="pendingPatch"
-        :schema="schema"
-        @update:show="(val) => (isPatchModalOpen = val)"
-        @confirm="confirmPatch"
-        @cancel="cancelPatch"
-      />
+      <PatchPreviewModal :show="isPatchModalOpen" :patch="pendingPatch" :schema="schema"
+        @update:show="(val) => (isPatchModalOpen = val)" @confirm="confirmPatch" @cancel="cancelPatch" />
 
     </main>
   </NConfigProvider>
@@ -483,16 +624,58 @@ h2 {
   color: #94a3b8;
 }
 
+/* Patch 历史记录样式（简洁标签） */
+.history-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.history-label {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.history-tag {
+  font-size: 12px;
+  color: #64748b;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.06);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-tag:hover {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+}
+
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
   }
 }
+
 /* 文本溢出省略 */
 .text-overflow-ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
+}
+
+.rollback-btn {
+  border-radius: 999px;
+  padding: 0 10px;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: radial-gradient(circle at 0 0, rgba(129, 140, 248, 0.18), transparent 55%);
+  color: #4f46e5;
 }
 </style>
