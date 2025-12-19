@@ -2,8 +2,6 @@
 const getConfig = () => ({
   apiKey: import.meta.env.VITE_AI_API_KEY || "",
   apiBaseUrl: import.meta.env.VITE_AI_API_BASE_URL || "https://api.deepseek.com",
-  appTitle: import.meta.env.VITE_APP_TITLE || "DeepSeek AI聊天",
-  debug: import.meta.env.VITE_APP_DEBUG === "true",
   model: "deepseek-chat",
   temperature: 0.3 // 控制回复的随机性
 });
