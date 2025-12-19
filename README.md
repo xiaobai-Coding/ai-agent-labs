@@ -43,7 +43,8 @@ ai-agent-labs/
 ├── 08-Chat-Travel-Assistant2.0/   # System Executor 1.0 (workflow + error recovery)
 ├── 09-RAG-Demo/                   # RAG demo (vector search + similarity)
 ├── 10-Document-RAG-Demo/          # Document parser + AI summary + chunking
-└── 11-RAG-QA1.0/                  # Complete RAG QA system (embedding + retrieval + MMR + AI QA)
+├── 11-RAG-QA1.0/                  # Complete RAG QA system (embedding + retrieval + MMR + AI QA)
+└── 12-AI-Schema-Builder/          # AI-powered JSON Schema form designer (PATCH & rollback)
 ```
 
 ## 🧰 Tools (shared)
@@ -83,13 +84,58 @@ Full docs: [tools/README.md](./tools/README.md)
 - 09 RAG Demo (vector search + similarity matching)
 - 10 Document RAG Demo (document parser + AI summary + chunking + reference jump)
 - 11 RAG QA 1.0 (complete RAG QA system: embedding + retrieval + MMR + AI QA + multi-reference jump)
+- 12 AI Schema Builder (AI-powered JSON Schema form designer with PATCH & rollback)
 
-Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system executor, 09→10 RAG pipeline, 11 complete RAG QA.
+Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system executor, 09→10 RAG pipeline, 11 complete RAG QA, 12 schema + patch workflow.
+
+---
+
+### **12️⃣ AI Schema Builder (AI-Powered JSON Schema Form Designer) ⭐ Schema + Patch Recommended**
+
+**An AI-driven JSON Schema form designer that demonstrates the engineering loop of "AI + Schema + Patch".**
+
+#### Core Features
+- ✅ **Natural language → JSON Schema generation**: Supports full generation (FULL_GENERATE) and regeneration (REGENERATE)
+- ✅ **PATCH_UPDATE incremental modification**: Intelligent incremental updates based on `current_schema` + `user_instruction`
+- ✅ **Patch Preview Modal**: Preview changes before applying to ensure modifications meet expectations
+- ✅ **Patch Diff semantic summary**: Automatically generates human-readable change summaries (added / updated / removed fields)
+- ✅ **Patch history**: Stores the last N applied patches (local storage with persistence support)
+- ✅ **One-click rollback**: Rollback to any historical version, quickly restore previous states
+- ✅ **Two-way editing**: Left JSON Schema text editor + Right real-time form preview
+- ✅ **Field-level editor (Field Editor)**: Click form fields to open drawer editor, real-time field configuration editing (label, placeholder, default, required, etc.), supports cancel rollback and single-field reset
+- ✅ **Schema import/export**: Supports JSON file import/export for Schema reuse and sharing
+- ✅ **State-aware UI**: Dynamically displays status hints and button text based on generation phase (idle / classifying / generating / patching / applying / done / error)
+
+#### AI Patch System
+- ✅ **Intent Classification**: Automatically identifies user intent (FULL_GENERATE / PATCH_UPDATE / REGENERATE), avoiding unnecessary full rewrites
+- ✅ **Incremental Patch updates**: Model returns only Patch operations (add / update / remove), not full Schema
+- ✅ **Patch preview & confirmation**: Shows change summary and raw operations list before applying, only applies after user confirmation
+- ✅ **Patch history management**: Records each successfully applied Patch, includes beforeSchema / afterSchema snapshots
+- ✅ **Visual highlighting**: Automatically highlights added and updated fields after applying Patch, clears after 4 seconds
+
+#### Technical Highlights
+- 🎯 **Schema as single source of truth**: All rendering, editing, import, export revolve around the same `schema` state
+- 🔄 **AI proposes, system validates**: AI generates Patch suggestions, system handles validation, preview, boundary control
+- 🛡️ **Safety first, incremental first**: All modifications are explainable, traceable, reversible, recommends incremental modifications over frequent full regeneration
+- 🎨 **Professional UI design**: Lightweight, calm, trustworthy visual style, emphasizes Schema as core rather than forms themselves
+
+#### What to Learn
+- How **AI safely modifies Schema** (instead of rewriting every time)
+- Engineering practices for **Patch design / history / rollback / highlighting**
+- How **Schema as single source of truth** runs through editing / rendering / export
+- Complete implementation of **AI + frontend engineering** loop
+
+📁 Path: `12-AI-Schema-Builder/`
 
 ## 🚀 Run
 ```bash
-# example: latest full travel assistant
+# example 1: latest full travel assistant
 cd 06-Chat-Travel-Assistant
+npm install
+npm run dev
+
+# example 2: AI JSON Schema form designer
+cd 12-AI-Schema-Builder
 npm install
 npm run dev
 ```
@@ -179,7 +225,8 @@ ai-agent-labs/
 ├── 08-Chat-Travel-Assistant2.0/ # 系统执行器 1.0（工作流编排 + 错误恢复）
 ├── 09-RAG-Demo/              # RAG 演示（向量检索 + 相似度匹配）
 ├── 10-Document-RAG-Demo/     # 文档解析 + AI 摘要 + 分块 + 引用跳转
-└── 11-RAG-QA1.0/             # 完整 RAG 问答系统（向量化 + 检索 + MMR + AI 问答）
+├── 11-RAG-QA1.0/             # 完整 RAG 问答系统（向量化 + 检索 + MMR + AI 问答）
+└── 12-AI-Schema-Builder/     # AI JSON Schema 表单设计器（自然语言生成 / PATCH / 回滚）
 ```
 
 特点：
@@ -473,11 +520,50 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 
 > 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流，08 看系统执行器架构，09→10 看 RAG 完整流程，11 看完整 RAG 问答系统**
 
+---
+
+### **1️⃣2️⃣ AI Schema Builder（AI JSON Schema 表单设计器）⭐ Schema + Patch 推荐**
+
+**一个可以用自然语言驱动的 JSON Schema 表单设计器，重点展示「AI + Schema + Patch」的工程闭环。**
+
+#### 核心功能
+- ✅ **自然语言生成 JSON Schema**：支持全量生成（FULL_GENERATE）和重新生成（REGENERATE）
+- ✅ **PATCH_UPDATE 增量修改**：基于 `current_schema` + `user_instruction` 进行智能增量更新
+- ✅ **Patch Preview Modal**：应用前预览变更，确保修改符合预期
+- ✅ **Patch Diff 语义摘要**：自动生成人类可读的变更摘要（新增 / 修改 / 删除字段）
+- ✅ **Patch 历史记录**：保存最近 N 条已应用的 Patch（本地存储，支持持久化）
+- ✅ **一键回滚**：支持回滚到任意历史版本，快速恢复之前的状态
+- ✅ **双向编辑**：左侧 JSON Schema 文本编辑 + 右侧实时表单预览
+- ✅ **字段级编辑器（Field Editor）**：点击表单字段打开抽屉编辑器，实时编辑字段配置（label、placeholder、default、required 等），支持取消回滚和单字段重置
+- ✅ **Schema 导入/导出**：支持 JSON 文件导入导出，便于 Schema 的复用和分享
+- ✅ **状态感知 UI**：根据生成阶段（idle / classifying / generating / patching / applying / done / error）动态显示状态提示和按钮文案
+
+#### AI Patch 系统
+- ✅ **意图分类（Intent Classification）**：自动识别用户意图（FULL_GENERATE / PATCH_UPDATE / REGENERATE），避免不必要的全量重写
+- ✅ **增量 Patch 更新**：模型只返回 Patch operations（add / update / remove），而非完整 Schema
+- ✅ **Patch 预览与确认**：应用前展示变更摘要和原始操作列表，用户确认后才真正应用
+- ✅ **Patch 历史管理**：记录每次成功应用的 Patch，包含 beforeSchema / afterSchema 快照
+- ✅ **可视化高亮**：应用 Patch 后自动高亮新增和修改的字段，4 秒后自动清除
+
+#### 技术亮点
+- 🎯 **Schema 作为单一事实源**：所有渲染、编辑、导入、导出都围绕同一个 `schema` 状态
+- 🔄 **AI 提议，系统验证**：AI 负责生成 Patch 建议，系统负责校验、预览、控制边界
+- 🛡️ **安全优先，增量优先**：所有修改都可解释、可追溯、可回退，推荐增量修改而非频繁全量重生成
+- 🎨 **专业 UI 设计**：轻量、冷静、可信的视觉风格，强调 Schema 是核心而非表单本身
+
+#### 适合看什么
+- 看 **AI 如何安全地改 Schema**（而不是每次重写）
+- 看 **Patch 设计 / 历史 / 回滚 / 高亮** 的工程实践
+- 看 **Schema 作为单一事实源** 如何贯穿编辑 / 渲染 / 导出
+- 看 **AI + 前端工程** 的完整闭环实现
+
+📁 路径：`12-AI-Schema-Builder/`
+
 ## 🚀 如何运行
 
 每个项目都是独立可运行的，进入对应目录即可：
 
-### 快速开始（推荐从 06 开始体验）
+### 快速开始（推荐从 06 或 12 开始体验）
 
 ```bash
 # 进入最新最全的旅行助手项目
@@ -526,6 +612,11 @@ npm run dev
 
 # 完整 RAG 问答系统
 cd 11-RAG-QA1.0
+npm install
+npm run dev
+
+# AI JSON Schema 表单设计器
+cd 12-AI-Schema-Builder
 npm install
 npm run dev
 ```
