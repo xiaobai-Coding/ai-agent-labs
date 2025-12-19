@@ -12,11 +12,12 @@
         'highlight-added': highlightMap?.added?.includes(field.name),
         'highlight-updated': highlightMap?.updated?.includes(field.name)
       }"
-      @click="(e) => onSelect(field.name, e)"
+      @click="onSelect(field.name, $event)"
     >
       <FieldRenderer
         :field="field"
-        v-model="formModel[field.name]"
+        :model-value="formModel[field.name] ?? null"
+        @update:model-value="(val) => (formModel[field.name] = (val ?? null) as FieldValue)"
       />
     </NFormItem>
   </NForm>
@@ -28,7 +29,7 @@ import { NForm, NFormItem } from 'naive-ui'
 // @ts-ignore vue shim
 import FieldRenderer from './FieldRenderer.vue'
 
-type Primitive = string | number | boolean | null
+type FieldValue = string | number | boolean | null
 
 const props = defineProps<{
   schema: any | null
@@ -48,14 +49,14 @@ const normalizedFields = computed(() => {
   return []
 })
 
-const formModel = reactive<Record<string, Primitive>>({})
+const formModel = reactive<Record<string, FieldValue>>({})
 
 watch(
   normalizedFields,
   (fields) => {
     fields.forEach((field: any) => {
       // 始终同步 default 值到 formModel
-      formModel[field.name] = field.default ?? null
+      formModel[field.name] = (field.default ?? null) as FieldValue
     })
   },
   { immediate: true, deep: true }
