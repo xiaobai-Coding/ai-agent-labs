@@ -1,209 +1,269 @@
 <script setup lang="ts">
 // @ts-nocheck
-import { ref } from 'vue'
-import { NButton } from 'naive-ui'
+import { ref, computed } from 'vue'
+import { NCard, NInput, NButton, NSpace } from 'naive-ui'
+
+type GeneratePhase = 'idle' | 'classifying' | 'generating' | 'patching' | 'applying' | 'done' | 'error'
 
 const props = defineProps<{
   onGenerate?: (prompt: string) => Promise<any> | void
+  hasSchema?: boolean // 是否有已存在的 schema
+  phase?: GeneratePhase // 当前生成阶段
 }>()
 const emit = defineEmits(['generate'])
 
 const userPrompt = ref<string>('')
-const loading = ref(false)
+
+// 示例 prompt
+const examplePrompts = [
+  '创建一个包含姓名、邮箱、手机号的注册表单',
+  '在当前表单中新增一个手机号字段，必填'
+]
+
+// 状态提示文案
+const statusText = computed(() => {
+  const phase = props.phase || 'idle'
+  const statusMap: Record<GeneratePhase, string> = {
+    idle: '描述你的表单需求，AI 将为你生成 Schema',
+    classifying: '正在理解你的意图…',
+    generating: '正在生成 Schema，请稍候…',
+    patching: '正在基于当前 Schema 生成修改方案…',
+    applying: '正在应用修改…',
+    done: '已完成，你可以继续修改或新增需求',
+    error: '执行失败，请检查输入或重试'
+  }
+  return statusMap[phase]
+})
+
+// 按钮文案根据 phase 动态变化
+const buttonText = computed(() => {
+  const phase = props.phase || 'idle'
+  const textMap: Record<GeneratePhase, string> = {
+    idle: '生成 Schema',
+    classifying: '处理中…',
+    generating: '处理中…',
+    patching: '处理中…',
+    applying: '处理中…',
+    done: '继续修改',
+    error: '重试'
+  }
+  return textMap[phase]
+})
+
+// 按钮是否禁用
+const isButtonDisabled = computed(() => {
+  const phase = props.phase || 'idle'
+  if (phase === 'idle' || phase === 'done' || phase === 'error') {
+    return !userPrompt.value.trim()
+  }
+  return true
+})
 
 const handleGenerate = async () => {
-  if (!userPrompt.value || loading.value) return
-  loading.value = true
+  if (!userPrompt.value.trim() || isButtonDisabled.value) return
   try {
     if (props.onGenerate) {
-      await props.onGenerate(userPrompt.value)
+      await props.onGenerate(userPrompt.value.trim())
     } else {
-      emit('generate', userPrompt.value)
+      emit('generate', userPrompt.value.trim())
     }
   } catch (e) {
     // swallow to allow UI reset
-  } finally {
-    loading.value = false
   }
 }
+
+// 处理键盘事件：Enter 提交，Shift+Enter 换行
+const handleKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    if (userPrompt.value.trim() && !isButtonDisabled.value) {
+      handleGenerate()
+    }
+  }
+}
+
+// 清空输入框
+const handleClear = () => {
+  userPrompt.value = ''
+}
+
+// 填充示例（不触发生成）
+const handleFillExample = () => {
+  const randomIndex = Math.floor(Math.random() * examplePrompts.length)
+  userPrompt.value = examplePrompts[randomIndex]
+}
+
+// 计算 placeholder 文本
+const inputPlaceholder = computed(() => {
+  return `描述你的表单需求，AI 将为你生成 Schema
+
+例如：
+• 创建一个注册表单：姓名、邮箱、手机号，手机号需要正则校验
+• 在当前表单中新增一个"手机号"字段，必填`
+})
 </script>
 
 <template>
-  <section class="prompt">
-    <div class="section-header">
-      <h1 class="eyebrow">AI Schema Builder</h1>
-      <p class="desc">让 AI 帮你生成表单与 Schema，描述需求 → 生成 Schema → 预览表单，一站式体验。</p>
+  <NCard class="prompt-card" :bordered="true">
+    <div class="prompt-header">
+      <h1 class="prompt-title">AI Schema Builder</h1>
+      <p class="prompt-subtitle">描述需求 → 生成 Schema → 实时预览表单（支持增量 Patch）</p>
     </div>
-    <div class="input-wrap">
-      <textarea
-        rows="6"
-        placeholder="例如：创建一个包含姓名、邮箱、手机号的注册表单，手机号需要正则校验"
-        v-model="userPrompt"
-        @keydown.enter.prevent="handleGenerate"
-      ></textarea>
-      <NButton
-        v-if="userPrompt.trim() || loading"
-        :class="['send-btn', { 'send-btn--loading': loading }]"
-        type="primary"
-        size="small"
-        circle
-        aria-label="生成 Schema"
-        :disabled="loading"
-        @click="handleGenerate"
-      >
-        <span v-if="!loading">↑</span>
-        <span v-else class="send-spinner"></span>
-      </NButton>
+    
+    <div class="prompt-input-section">
+      <NInput
+        :value="userPrompt"
+        type="textarea"
+        :placeholder="inputPlaceholder"
+        :rows="5"
+        class="prompt-textarea"
+        @update:value="(val) => userPrompt = val"
+        @keydown="handleKeydown"
+      />
     </div>
-  </section>
+
+    <div class="prompt-status">
+      <span class="status-text">{{ statusText }}</span>
+    </div>
+
+    <div class="prompt-actions">
+      <NSpace :wrap="true" :size="[12, 12]">
+        <NButton
+          type="primary"
+          :disabled="isButtonDisabled"
+          @click="handleGenerate"
+        >
+          {{ buttonText }}
+        </NButton>
+        <NButton
+          quaternary
+          :disabled="props.phase === 'classifying' || props.phase === 'generating' || props.phase === 'patching' || props.phase === 'applying'"
+          @click="handleClear"
+        >
+          清空
+        </NButton>
+        <NButton
+          quaternary
+          :disabled="props.phase === 'classifying' || props.phase === 'generating' || props.phase === 'patching' || props.phase === 'applying'"
+          @click="handleFillExample"
+        >
+          示例
+        </NButton>
+      </NSpace>
+    </div>
+  </NCard>
 </template>
 
 <style scoped>
-.prompt {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.prompt-card {
+  padding: 24px;
+  background: linear-gradient(135deg, #fafbfc 0%, #ffffff 50%, #fafbfc 100%);
+  border: 1px solid rgba(99, 102, 241, 0.06);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
 }
 
-.hero-compact {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(14, 165, 233, 0.1));
-  border: 1px solid rgba(99, 102, 241, 0.14);
-  border-radius: 14px;
-  padding: 12px 14px;
-  box-shadow: 0 12px 28px rgba(99, 102, 241, 0.12);
+.prompt-header {
+  margin-bottom: 20px;
 }
 
-.eyebrow {
-  margin: 0 0 4px;
-  color: #6366f1;
+.prompt-title {
+  margin: 0 0 8px 0;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: 0.4px;
-}
-
-h1 {
-  margin: 0;
-  font-size: 18px;
   color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
-.subtext {
-  margin: 6px 0 0;
-  color: #334155;
+.prompt-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.prompt-input-section {
+  margin-bottom: 12px;
+}
+
+.prompt-status {
+  margin-bottom: 16px;
+}
+
+.status-text {
   font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.5;
 }
 
-.section-header h2 {
-  margin: 0;
-  font-size: 16px;
-}
-
-.desc {
-  margin: 4px 0 0;
-  color: #475569;
+.prompt-textarea :deep(.n-input__textarea-el) {
   font-size: 14px;
-}
-
-textarea {
-  width: 100%;
-  min-height: 80px;
-  height: 100px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  background: #f8f9ff;
-  resize: vertical;
-  font-size: 14px;
+  line-height: 1.6;
   color: #0f172a;
-  outline: none;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  min-height: 120px;
+  background: #ffffff;
+  transition: border-color 0.15s;
 }
 
-textarea:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+.prompt-textarea :deep(.n-input__textarea-el):focus {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.06);
 }
 
-.send-btn {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  padding: 0;
+.prompt-textarea :deep(.n-input__textarea-el::placeholder) {
+  color: #94a3b8;
+  white-space: pre-line;
 }
 
-.send-btn :deep(.n-button) {
-  width: 46px;
-  height: 46px;
-  border-radius: 999px;
-  box-shadow: 0 10px 24px rgba(99, 102, 241, 0.25);
-  display: inline-flex;
+.prompt-actions {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: 700;
 }
 
-.send-btn :deep(.n-button:not(.n-button--disabled)):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 30px rgba(99, 102, 241, 0.28);
+.prompt-actions :deep(.n-space) {
+  width: 100%;
 }
 
-.send-btn :deep(.n-button:not(.n-button--disabled)):active {
-  transform: translateY(0);
-  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.22);
+.prompt-actions :deep(.n-button) {
+  font-weight: 500;
 }
 
-.send-btn--loading :deep(.n-button) {
-  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.7), 0 0 0 6px rgba(99, 102, 241, 0.28);
-  animation: send-pulse 1.1s ease-out infinite;
+.prompt-actions :deep(.n-button--primary-type) {
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
 }
 
-.send-spinner {
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  border: 2px solid rgba(248, 250, 252, 0.4);
-  border-top-color: #ffffff;
-  border-right-color: #e5e7eb;
-  animation: send-spin 0.7s linear infinite;
+.prompt-actions :deep(.n-button--quaternary-type) {
+  opacity: 0.7;
+  font-weight: 400;
 }
 
-.input-wrap {
-  position: relative;
+.prompt-actions :deep(.n-button--quaternary-type):hover {
+  opacity: 1;
 }
 
-@keyframes send-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes send-pulse {
-  0% {
-    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.7), 0 0 0 4px rgba(99, 102, 241, 0.1);
-  }
-  70% {
-    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.2), 0 0 0 10px rgba(129, 140, 248, 0.0);
-  }
-  100% {
-    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.2), 0 0 0 4px rgba(129, 140, 248, 0.0);
-  }
-}
-
+/* 移动端适配 */
 @media (max-width: 768px) {
-  .actions {
-    justify-content: stretch;
+  .prompt-card {
+    padding: 18px;
   }
 
-  h1 {
-    font-size: 16px;
+  .prompt-title {
+    font-size: 20px;
   }
 
-  .subtext {
-    font-size: 12px;
+  .prompt-subtitle {
+    font-size: 13px;
   }
 
-  .hero-compact {
-    padding: 10px 12px;
+  .prompt-actions :deep(.n-space) {
+    flex-wrap: wrap;
   }
+
+  .prompt-actions :deep(.n-button) {
+    flex: 1;
+    min-width: 100px;
+  }
+}
+.prompt-card :deep(.n-card__content) {
+  padding: 0;
 }
 </style>

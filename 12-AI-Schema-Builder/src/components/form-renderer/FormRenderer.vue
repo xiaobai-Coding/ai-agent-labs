@@ -12,7 +12,7 @@
         'highlight-added': highlightMap?.added?.includes(field.name),
         'highlight-updated': highlightMap?.updated?.includes(field.name)
       }"
-      @click="onSelect(field.name)"
+      @click="(e) => onSelect(field.name, e)"
     >
       <FieldRenderer
         :field="field"
@@ -61,7 +61,19 @@ watch(
   { immediate: true, deep: true }
 )
 
-const onSelect = (key: string) => {
+const onSelect = (key: string, event: MouseEvent) => {
+  // 检查点击目标是否是输入框或其子元素
+  const target = event.target as HTMLElement
+  const isInputElement = target.tagName === 'INPUT' || 
+                        target.tagName === 'TEXTAREA' || 
+                        target.tagName === 'SELECT' ||
+                        target.closest('input, textarea, select, .n-input, .n-select, .n-switch')
+  
+  // 如果是输入框，不触发选择事件
+  if (isInputElement) {
+    return
+  }
+  
   emit('select-field', key)
 }
 </script>

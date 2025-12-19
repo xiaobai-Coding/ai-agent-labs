@@ -1,5 +1,5 @@
 <template>
-  <NDrawer :show="show" :width="380" placement="right" @update:show="(val) => emit('update:show', val)">
+  <NDrawer :show="show" :width="380" placement="right" :mask-closable="false" :close-on-esc="false" @update:show="(val) => emit('update:show', val)">
     <NDrawerContent :title="`正在编辑字段 ${fieldKey}`">
       <NForm label-placement="top" :show-require-mark="false" :model="formState">
         <NFormItem label="标题 (label)">
