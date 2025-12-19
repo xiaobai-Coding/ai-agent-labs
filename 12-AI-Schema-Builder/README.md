@@ -7,6 +7,9 @@ AI Schema Builder is a schema-driven form design tool: users describe their need
 Unlike typical “one-shot” AI demos, this project focuses on **engineering-grade control, validation, and incremental evolution**.
 
 ---
+## Live Demo
+
+👉 https://ai-schema-builder-ten.vercel.app/
 
 ### Features (EN)
 
@@ -167,6 +170,9 @@ AI Schema Builder 以 JSON Schema 为核心，所有表单都由 Schema 驱动�
 它的目标不是做一个“炫酷但一次性的 Demo”，而是展示 **如何把 AI 融入真实前端工程，做到可控、可回滚、可维护**。
 
 ---
+## 在线体验地址
+
+👉 https://ai-schema-builder-ten.vercel.app/
 
 ### 功能特性（中文）
 
