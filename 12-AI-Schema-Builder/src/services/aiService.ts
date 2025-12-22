@@ -25,11 +25,11 @@ export async function callDeepSeekAPI(userPrompt: string, prompt: string | null)
     temperature: config.temperature,
     // stream: true
   };
-  const res = await fetch(endpoint, {
+  const res = await fetch('/api/ai', {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`
+      // Authorization: `Bearer ${config.apiKey}`
     },
     body: JSON.stringify(requestBody)
   });
