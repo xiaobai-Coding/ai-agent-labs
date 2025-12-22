@@ -54,16 +54,24 @@ export default async function handler(
   }
 
   // 4️⃣ 读取服务端 Key
-  const apiKey = process.env.DEEPSEEK_API_KEY
+  const API_KEY = process.env.AI_API_KEY;
+  const API_BASE_URL = process.env.AI_API_BASE_URL;
+  
+  if (!API_KEY) {
+    throw new Error('Missing AI_API_KEY');
+  }
+  if (!API_BASE_URL) {
+    throw new Error('Missing AI_API_BASE_URL');
+  }
   try {
     // 5️⃣ 转发请求到 DeepSeek
     const response = await fetch(
-      `${process.env.DEEPSEEK_BASE_URL}/chat/completions`,
+      `${API_BASE_URL}/chat/completions`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${API_KEY}`,
         },
         body: JSON.stringify({
           model: 'deepseek-chat',
