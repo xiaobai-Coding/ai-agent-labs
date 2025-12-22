@@ -1,6 +1,14 @@
 // api/ai.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
+function requireEnv(name: string) {
+  const v = process.env[name];
+  if (!v) {
+    throw new Error(`Missing env: ${name}`);
+  }
+  return v;
+}
+
 /**
  * ========= 简单内存限流 =========
  * 每个 IP 每分钟最多 20 次
@@ -54,9 +62,10 @@ export default async function handler(
   }
 
   // 4️⃣ 读取服务端 Key
-  const API_KEY = process.env.AI_API_KEY;
-  const API_BASE_URL = process.env.AI_API_BASE_URL;
-  
+  const API_KEY = requireEnv("AI_API_KEY");
+  const API_BASE_URL = requireEnv("AI_API_BASE_URL");
+  console.log('API_KEY', API_KEY);
+  console.log('API_BASE_URL', API_BASE_URL);
   if (!API_KEY) {
     throw new Error('Missing AI_API_KEY');
   }
