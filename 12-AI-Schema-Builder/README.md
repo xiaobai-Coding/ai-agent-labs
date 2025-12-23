@@ -4,8 +4,8 @@
 
 An AI-powered JSON Schema form builder that transforms natural language into **editable, incremental, and production-ready schemas**.
 
-AI Schema Builder is not a one-shot AI demo.  
-It is an **engineering-oriented AI system** that demonstrates how to integrate LLMs into real front-end workflows with **control, validation, patching, and rollback**.
+AI Schema Builder is **not** a one-shot AI demo.  
+It is an **engineering-oriented AI system** that demonstrates how to integrate LLMs into real front-end workflows with **control, validation, patching, rollback, and cost protection**.
 
 👉 Live Demo: https://ai-schema-builder-ten.vercel.app/
 
@@ -34,9 +34,9 @@ AI Schema Builder is designed to solve this exact problem.
 
 ---
 
-### Core Capabilities
+## Core Capabilities
 
-#### 1. Natural Language → JSON Schema (Controlled Generation)
+### 1. Natural Language → JSON Schema (Controlled Generation)
 
 - Users describe form requirements in plain language
 - AI generates **strictly structured JSON Schema**
@@ -44,7 +44,7 @@ AI Schema Builder is designed to solve this exact problem.
 
 ---
 
-#### 2. Schema-Driven Form Rendering
+### 2. Schema-Driven Form Rendering
 
 - JSON Schema is the **single source of truth**
 - Forms are rendered dynamically from `schema.fields`
@@ -56,9 +56,9 @@ AI Schema Builder is designed to solve this exact problem.
 
 ---
 
-#### 3. Two-Way Editable Schema with Safety Guards
+### 3. Two-Way Editable Schema with Safety Guards
 
-- Left panel: JSON editor (raw schema)
+- Left panel: raw JSON schema editor
 - Right panel: live form preview
 - Validation-first workflow:
   - Invalid JSON never breaks the UI
@@ -66,7 +66,7 @@ AI Schema Builder is designed to solve this exact problem.
 
 ---
 
-#### 4. Field-Level Editor (Human-in-the-Loop)
+### 4. Field-Level Editor (Human-in-the-Loop)
 
 - Click any field to open a drawer editor
 - Edit:
@@ -83,7 +83,7 @@ AI Schema Builder is designed to solve this exact problem.
 
 ---
 
-#### 5. Schema Import / Export (Closed Loop)
+### 5. Schema Import / Export (Closed Loop)
 
 - Export schema:
   - copy JSON
@@ -95,9 +95,9 @@ AI Schema Builder is designed to solve this exact problem.
 
 ---
 
-### AI Patch System (Core Highlight)
+## AI Patch System (Core Highlight)
 
-#### Intent Classification
+### Intent Classification
 
 Before generation, AI classifies user intent as:
 - `FULL_GENERATE`
@@ -109,7 +109,7 @@ This prevents accidental full rewrites.
 
 ---
 
-#### Incremental Patch Updates
+### Incremental Patch Updates
 
 For `PATCH_UPDATE`:
 - AI receives:
@@ -122,7 +122,7 @@ For `PATCH_UPDATE`:
 
 ---
 
-#### Patch Preview & Diff
+### Patch Preview & Diff
 
 - Preview modal shows:
   - semantic change summary
@@ -131,7 +131,7 @@ For `PATCH_UPDATE`:
 
 ---
 
-#### Patch History & Rollback
+### Patch History & Rollback
 
 - Stores last N applied patches
 - Each entry includes:
@@ -141,30 +141,69 @@ For `PATCH_UPDATE`:
 
 ---
 
-### Architecture Philosophy
+## Security & Deployment (Engineering Reality)
+
+### Why Frontend Direct AI Calls Are Dangerous
+
+- API keys exposed in browser
+- Requests can be replayed or scripted
+- Unlimited cost risk
+
+**Frontend ≠ Security boundary**
+
+---
+
+### Serverless API Layer (Vercel)
+
+ All AI requests go through `/api/ai`:
+ Client → Vercel Serverless API → AI Provider
+Benefits:
+- API keys stay server-side
+- Request validation & sanitization
+- Centralized error handling
+- Rate limiting & cost protection
+
+---
+
+### Cost Protection & Abuse Prevention
+
+Implemented strategies:
+- Request rate limiting (per IP / per session)
+- Input validation & max payload limits
+- Graceful error handling
+- Server-side environment variable isolation
+
+---
+
+## Architecture Philosophy
 
 - **Schema as Single Source of Truth**
 - **AI proposes, system validates and applies**
 - Validation-first, human-in-the-loop
-- Incremental evolution over full regeneration
+- Patch-based evolution over full regeneration
+- Separation of concerns:
+  - AI = reasoning
+  - System = execution & safety
 
 ---
 
-### Tech Stack
+## Tech Stack
 
 - Vue 3 + TypeScript
 - Naive UI
 - Vite
 - DeepSeek (OpenAI-style API)
+- Vercel Serverless Functions
 
 ---
 
-### Project Value
+## Project Value
 
 This project demonstrates:
 - How to build **engineering-grade AI tools**
-- How to prevent AI from breaking state
-- How to design controllable, evolvable AI systems
+- How to safely integrate LLMs into real apps
+- How to control AI-generated state changes
+- How to prevent cost abuse and instability
 
 Suitable for:
 - AI + Frontend engineering demos
@@ -175,14 +214,15 @@ Suitable for:
 
 <a id="zh-readme"></a>
 
-## 🇨🇳 中文版说明
+# 🇨🇳 中文版说明
 
-### 项目背景
+## 项目背景
 
 大多数 AI 表单 Demo 只能做到：
 - 一次性生成
 - 每次修改就全量重写
 - 无法撤销、无法回滚
+- 无成本控制
 
 但真实用户会说：
 - “加一个手机号字段”
@@ -192,21 +232,21 @@ Suitable for:
 
 **90% 的 AI Demo 就死在这里。**
 
-AI Schema Builder 正是为了解决这个工程级问题。
+AI Schema Builder 正是为了解决这个**工程级问题**。
 
 ---
 
-### 核心能力
+## 核心能力
 
-#### 1. 自然语言 → JSON Schema（受控生成）
+### 1. 自然语言 → JSON Schema（受控生成）
 
-- 用户使用自然语言描述表单需求
+- 使用自然语言描述表单需求
 - AI 输出结构化 JSON Schema
-- 输出格式严格受控，并在进入系统前校验
+- 在进入系统前进行严格校验
 
 ---
 
-#### 2. Schema 驱动的表单渲染
+### 2. Schema 驱动的表单渲染
 
 - JSON Schema 是唯一事实源
 - 表单完全由 `schema.fields` 动态渲染
@@ -218,26 +258,22 @@ AI Schema Builder 正是为了解决这个工程级问题。
 
 ---
 
-#### 3. Schema 双向可编辑 + 安全兜底
+### 3. Schema 双向可编辑 + 安全兜底
 
 - 左侧：JSON 编辑区
 - 右侧：表单实时预览
-- 校验优先机制：
+- 校验优先：
   - 非法 JSON 不会破坏界面
   - 永远保留最近一次合法 Schema
 
 ---
 
-#### 4. 字段级编辑器（人类参与）
+### 4. 字段级编辑器（人类参与）
 
 - 点击字段打开编辑抽屉
 - 可编辑：
-  - label
-  - 描述
-  - 必填
-  - 默认值
-  - 枚举
-  - 类型约束
+  - label / 描述 / 必填
+  - 默认值 / 枚举 / 类型约束
 - 支持：
   - 即时生效
   - 取消回滚
@@ -245,7 +281,7 @@ AI Schema Builder 正是为了解决这个工程级问题。
 
 ---
 
-#### 5. Schema 导入 / 导出（形成闭环）
+### 5. Schema 导入 / 导出（闭环）
 
 - 导出：
   - 复制 JSON
@@ -253,37 +289,36 @@ AI Schema Builder 正是为了解决这个工程级问题。
 - 导入：
   - 粘贴 JSON
   - 上传 `.json`
-- 校验失败时不会覆盖当前 Schema
+- 校验失败不覆盖当前 Schema
 
 ---
 
-### AI Patch 机制（核心亮点）
+## AI Patch 机制（核心亮点）
 
-#### 意图识别
+### 意图识别
 
-在生成前先判断用户意图：
-- 全量生成（FULL_GENERATE）
-- 增量修改（PATCH_UPDATE）
-- 重新生成（REGENERATE）
-- 无法识别（UNKNOWN）
+在生成前判断用户意图：
+- 全量生成
+- 增量修改
+- 重新生成
+- 无法识别
 
-避免“只想小改却被全量重写”。
+防止误触发全量重写。
 
 ---
 
-#### 增量 Patch 更新
+### 增量 Patch 更新
 
-在 PATCH_UPDATE 模式下：
-- AI 接收当前 Schema + 用户修改描述
+- AI 接收：
+  - 当前 Schema
+  - 用户修改描述
 - 只返回 Patch 操作：
-  - 新增
-  - 修改
-  - 删除
+  - 新增 / 修改 / 删除
 - 不允许返回完整 Schema
 
 ---
 
-#### Patch 预览与 Diff
+### Patch 预览与 Diff
 
 - 应用前展示：
   - 变更摘要
@@ -292,7 +327,7 @@ AI Schema Builder 正是为了解决这个工程级问题。
 
 ---
 
-#### Patch 历史与回滚
+### Patch 历史与回滚
 
 - 记录最近 N 次 Patch
 - 每条包含：
@@ -302,7 +337,28 @@ AI Schema Builder 正是为了解决这个工程级问题。
 
 ---
 
-### 设计理念
+## 安全与部署（真实工程场景）
+
+### 为什么不能前端直连 AI
+
+- API Key 暴露在浏览器
+- 请求可被脚本模拟
+- 存在严重刷量与资金风险
+
+---
+
+### Serverless API 执行层（Vercel）
+
+前端 → Vercel Serverless API → AI 模型
+优势：
+- Key 永不暴露
+- 请求统一校验
+- 集中限流与错误处理
+- 成本与安全可控
+
+---
+
+## 设计理念
 
 - Schema 是唯一事实源
 - AI 负责“想”，系统负责“执行”
@@ -315,12 +371,9 @@ AI Schema Builder 正是为了解决这个工程级问题。
 
 ---
 
-### 项目意义
+## 项目意义
 
-本项目展示的是：
-
-**如何把 AI 真正融入前端工程体系，  
-而不是做一个一次性的 AI 玩具。**
+**如何把 AI 真正变成工程系统的一部分，而不是一次性的 Demo。**
 
 适用于：
 - AI + 前端工程实践
