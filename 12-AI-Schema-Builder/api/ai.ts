@@ -64,8 +64,6 @@ export default async function handler(
   // 4️⃣ 读取服务端 Key
   const API_KEY = requireEnv("AI_API_KEY");
   const API_BASE_URL = requireEnv("AI_API_BASE_URL");
-  console.log('API_KEY', API_KEY);
-  console.log('API_BASE_URL', API_BASE_URL);
   if (!API_KEY) {
     throw new Error('Missing AI_API_KEY');
   }
