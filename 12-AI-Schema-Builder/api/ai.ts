@@ -1,6 +1,7 @@
 // api/ai.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-
+import { kv } from '@vercel/kv'
+// env requireds: AI_API_KEY, AI_API_BASE_URL
 function requireEnv(name: string) {
   const v = process.env[name];
   if (!v) {
@@ -15,23 +16,40 @@ function requireEnv(name: string) {
  */
 const rateLimitMap = new Map<string, number[]>()
 
-function checkRateLimit(ip: string) {
-  const now = Date.now()
-  const windowMs = 60_000
-  const limit = 20
+function normalizeIp(raw?: string | undefined) {
+  if (!raw) return 'unknown'
+  // x-forwarded-for may contain a comma-separated list, take the first entry
+  const first = raw.split(',')[0].trim()
+  // strip IPv6 bracket/port or trailing port if present
+  const noBracket = first.replace(/^\[(.*)\](:\d+)?$/, '$1')
+  const noPort = noBracket.replace(/:\d+$/, '')
+  if (noPort === '::1') return '127.0.0.1'
+  if (noPort.startsWith('::ffff:')) return noPort.replace('::ffff:', '')
+  return noPort
+}
 
-  const records = rateLimitMap.get(ip) || []
-  const recent = records.filter(t => now - t < windowMs)
+// 限流函数，用于检查IP是否超过限制
+async function checkRateLimit(ip: string) {
+  const windowSeconds = 60          // 时间窗：60 秒
+  const limit = 10                   // 限制次数
+  const key = `rate_limit:${ip}`
 
-  if (recent.length >= limit) {
+  // 原子自增
+  const count = await kv.incr(key)
+
+  // 第一次请求，设置过期时间
+  if (count === 1) {
+    await kv.expire(key, windowSeconds)
+  }
+
+  if (count > limit) {
     return false
   }
 
-  recent.push(now)
-  rateLimitMap.set(ip, recent)
   return true
 }
 
+// Vercel API handler
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -42,14 +60,14 @@ export default async function handler(
   }
 
   // 2️⃣ IP 限流
-  const ip =
-    (req.headers['x-forwarded-for'] as string)?.split(',')[0] ||
+  const rawIp =
+    (req.headers['x-forwarded-for'] as string) ||
     req.socket.remoteAddress ||
     'unknown'
-
-  if (!checkRateLimit(ip)) {
+  const ip = normalizeIp(rawIp)
+  if (!(await checkRateLimit(ip))) {
     return res.status(429).json({
-      error: 'Too many requests, please slow down.',
+      error: '已经达到请求限制，请稍后再试。',
     })
   }
 

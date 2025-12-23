@@ -5,7 +5,6 @@ const getConfig = () => ({
   model: "deepseek-chat",
   temperature: 0.3 // 控制回复的随机性
 });
-
 const config = getConfig();
 /**
  * 生成 JSON Schema
@@ -25,17 +24,39 @@ export async function callDeepSeekAPI(userPrompt: string, prompt: string | null)
     temperature: config.temperature,
     // stream: true
   };
-  const res = await fetch('/api/ai', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      // Authorization: `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify(requestBody)
-  });
+  try {
+    const res = await fetch('/api/ai', {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // Authorization: `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify(requestBody)
+    });
 
-  const data = await res.json();
-  const choices = data.choices[0].message.content;
-  // 假设模型返回的是纯 JSON 字符串
-  return JSON.parse(choices);
+    if (!res.ok) {
+      let errBody: any = {}
+      try {
+        errBody = await res.json()
+      } catch (e) {
+        // ignore
+      }
+      const msg = errBody?.error || res.statusText || `Request failed with status ${res.status}`
+      return { error: msg }
+    }
+
+    const data = await res.json()
+    const choices = data?.choices?.[0]?.message?.content
+    if (!choices) {
+      return { error: 'Invalid model response' }
+    }
+    try {
+      return JSON.parse(choices)
+    } catch (e) {
+      return { error: 'Failed to parse model response' }
+    }
+  } catch (error: any) {
+    const msg = error?.message || 'Unknown error'
+    return { error: msg }
+  }
 }

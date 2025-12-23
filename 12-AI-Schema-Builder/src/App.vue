@@ -52,7 +52,6 @@ const themeOverrides = {
     buttonColor: '#ffffff'
   }
 }
-
 // 默认示例 Schema 文本
 const defaultSchema = {
   title: '用户注册',
@@ -263,7 +262,13 @@ async function handleGenerate(userPrompt: string) {
   }
   try {
     generatePhase.value = 'classifying'
-    const classification = await callDeepSeekAPI(userPrompt, ClassifierPrompt)
+    const classification: any = await callDeepSeekAPI(userPrompt, ClassifierPrompt)
+    if (classification && classification.error) {
+      parseError.value = classification.error
+      generatePhase.value = 'error'
+      message.error(classification.error)
+      return
+    }
     await generateSchema(userPrompt, classification.intent)
     generatePhase.value = 'done'
   } catch (err: any) {
@@ -295,7 +300,13 @@ ${userPrompt}
       generatePhase.value = 'generating'
       result = await callDeepSeekAPI(userPrompt, getSchemaPrompt(intent))
     }
-
+    console.log(result)
+    if(result && result.error){
+      parseError.value = result.error
+      generatePhase.value = 'error'
+      message.error(result.error)
+      return
+    }
     if (intent === 'PATCH_UPDATE') {
       pendingPatch.value = result
       isPatchModalOpen.value = true
