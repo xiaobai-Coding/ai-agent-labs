@@ -31,7 +31,7 @@ function normalizeIp(raw?: string | undefined) {
 // 限流函数，用于检查IP是否超过限制
 async function checkRateLimit(ip: string) {
   const windowSeconds = 60          // 时间窗：60 秒
-  const limit = 10                   // 限制次数
+  const limit = 3                   // 限制次数
   const key = `rate_limit:${ip}`
 
   // 原子自增
