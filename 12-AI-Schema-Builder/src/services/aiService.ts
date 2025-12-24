@@ -29,6 +29,7 @@ export async function callDeepSeekAPI(userPrompt: string, prompt: string | null)
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "X-Client-Token": import.meta.env.VITE_CLIENT_TOKEN || "",
         // Authorization: `Bearer ${config.apiKey}`
       },
       body: JSON.stringify(requestBody)
