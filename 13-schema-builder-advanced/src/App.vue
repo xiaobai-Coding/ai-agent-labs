@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // @ts-nocheck
 import { ref, watch, nextTick } from 'vue'
-import { NConfigProvider, NInput, NAlert, NButton, NDrawer, NDrawerContent, NDropdown, createDiscreteApi } from 'naive-ui'
+import { NConfigProvider, NInput, NAlert, NButton, NDrawer, NDrawerContent, NDropdown, createDiscreteApi, NDialog } from 'naive-ui'
 // @ts-ignore vue shim
 import PromptInput from './components/PromptInput.vue'
 // @ts-ignore vue shim
@@ -15,6 +15,10 @@ import VersionMismatchDialog from './components/VersionMismatchDialog.vue'
 import { callDeepSeekAPI } from './services/aiService'
 import { ClassifierPrompt, getSchemaPrompt } from './prompts/schemaPrompt';
 import { applyPatchSafe } from './utils/applyPatch'
+import { validatePatch } from './utils/validatePatch'
+import { applyPatchPartial } from './utils/applyPatchPartial'
+
+
 const themeOverrides = {
   common: {
     primaryColor: '#6366f1',
@@ -90,6 +94,7 @@ const showFieldEditor = ref(false) // 控制字段编辑器抽屉
 const backupField = ref<any>(null) // 打开 Drawer 时备份字段
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const pendingPatch = ref<any>(null) // 待确认的 patch
+const patchDecisions = ref<any[]>([]) // patch 操作决策
 const isPatchModalOpen = ref(false) // 控制 Patch Preview Modal 显示
 const showHistoryDrawer = ref(false) // 控制 Patch History Drawer 显示
 
@@ -101,7 +106,7 @@ const generatePhase = ref<GeneratePhase>('idle')
 const highlightMap = ref<{ added: string[]; updated: string[] }>({ added: [], updated: [] })
 
 // B: 变更摘要提示（使用 createDiscreteApi 在根组件外创建）
-const { message } = createDiscreteApi(['message'])
+const { message, dialog } = createDiscreteApi(['message', 'dialog'])
 
 // 版本冲突对话控制（使用组件化的 NDialog）
 const showVersionMismatchDialog = ref(false)
@@ -354,8 +359,16 @@ ${userPrompt}
       return
     }
     if (intent === 'PATCH_UPDATE') {
-      // Attach baseVersion so we know patch was generated against which schema version
-      pendingPatch.value = Object.assign({}, result)
+      // Validate patch using new validation layer
+      const validation = validatePatch(schema.value, result)
+      console.log('patch validation', validation)
+
+      // Store validation result for modal consumption
+      pendingPatch.value = {
+        ...result,
+        validation
+      }
+
       isPatchModalOpen.value = true
       generatePhase.value = 'done'
     } else {
@@ -380,68 +393,70 @@ ${userPrompt}
 
 function confirmPatch() {
   if (!pendingPatch.value || !schema.value) return
+
+  const patch = pendingPatch.value
+  const validation = patch.validation
+
+  if (!validation) {
+    message.error('验证信息缺失，无法应用')
+    return
+  }
+
   try {
     generatePhase.value = 'applying'
-    const patch = pendingPatch.value
     const beforeSchema = deepClone(schema.value) // 保存应用前的快照
-    // 使用安全应用函数，防止 Schema Drift（版本不一致）被错误应用
-    const patched = applyPatchSafe(schema.value, patch)
-    // A: 生成高亮 Map
-    const added: string[] = []
-    const updated: string[] = []
-    if (patch.operations) {
-      patch.operations.forEach((op: any) => {
-        if (op.op === 'add' && op.target === 'field' && op.value?.name) {
-          added.push(op.value.name)
-        } else if (op.op === 'update' && op.target === 'field' && op.name) {
-          updated.push(op.name)
-        }
-      })
+
+    // If no valid operations, show warning and don't apply
+    if (!validation.ok) {
+      message.warning('没有可应用的修改')
+      pendingPatch.value = null
+      isPatchModalOpen.value = false
+      generatePhase.value = 'idle'
+      return
     }
 
-    // B: 生成变更摘要
-    const summaryParts: string[] = []
-    if (added.length > 0) {
-      const labels = added.map((name) => {
-        const field = patched.fields?.find((f: any) => f.name === name)
-        return field?.label || name
-      })
-      summaryParts.push(`新增「${labels.join('、')}」`)
+    // Apply valid operations using applyPatchSafe
+    const patchForApply = {
+      baseVersion: validation.baseVersion,
+      operations: validation.validOps
     }
-    if (updated.length > 0) {
-      const labels = updated.map((name) => {
-        const field = patched.fields?.find((f: any) => f.name === name)
-        return field?.label || name
-      })
-      summaryParts.push(`修改「${labels.join('、')}」`)
-    }
-    const summary = summaryParts.length > 0 ? summaryParts.join('，') : '应用 Patch'
 
-    // 添加到历史记录（仅成功应用的 Patch）
+    const nextSchema = applyPatchSafe(schema.value, patchForApply)
+
+    // Compute which fields were applied for highlight
+    const appliedFieldNames: string[] = []
+    for (const op of validation.validOps) {
+      if (op.target === 'field') {
+        if (op.op === 'add' && op.value?.name) appliedFieldNames.push(op.value.name)
+        if (op.op === 'update' && op.name) appliedFieldNames.push(op.name)
+        // remove operations don't get highlighted
+      }
+    }
+
+    // Update schema state
+    schema.value = nextSchema
+    schemaText.value = JSON.stringify(nextSchema, null, 2)
+    highlightMap.value = { added: appliedFieldNames, updated: appliedFieldNames }
+
+    // Write history
     addPatchHistory({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       timestamp: Date.now(),
-      summary,
+      summary: validation.summary || `${validation.stats.valid} 项修改`,
       patch: deepClone(patch),
       beforeSchema,
-      afterSchema: deepClone(patched)
+      afterSchema: deepClone(nextSchema)
     })
 
-    // 更新 schema（唯一合法数据源）
-    schema.value = patched
-    schemaText.value = JSON.stringify(patched, null, 2)
-    highlightMap.value = { added, updated }
+    // Toast / message
+    const skippedNote = validation.stats.invalid > 0 ? `，${validation.stats.invalid} 条已跳过` : ''
+    message.success(`已应用：${validation.summary || validation.stats.valid + ' 项'}${skippedNote}`, { duration: 4000 })
 
-    if (summaryParts.length > 0) {
-      message.success(`已应用修改：${summary}`, { duration: 4000 })
-    }
-
-    // 4秒后清理高亮
+    // cleanup
     setTimeout(() => {
       highlightMap.value = { added: [], updated: [] }
     }, 4000)
 
-    // 清理 Patch 相关临时状态
     pendingPatch.value = null
     isPatchModalOpen.value = false
     selectedFieldKey.value = null
@@ -451,14 +466,11 @@ function confirmPatch() {
     generatePhase.value = 'done'
   } catch (err: any) {
     console.error('应用 Patch 失败', err)
-    // 如果是版本不匹配，则给出明确提示并保持现有 schema 状态不变
     if (err && (err.code === 'SCHEMA_VERSION_MISMATCH' || err.message === 'SCHEMA_VERSION_MISMATCH')) {
       const current = schema.value?.meta?.version ?? 1
       const base = pendingPatch.value?.baseVersion ?? err.baseVersion ?? 1
-      // 使用组件化对话框展示，便于后续样式与布局调整
       versionMismatchInfo.value = { current, base }
       showVersionMismatchDialog.value = true
-      // 不修改任何状态（按要求）
       pendingPatch.value = null
       isPatchModalOpen.value = false
       generatePhase.value = 'idle'
@@ -709,8 +721,8 @@ function handleFileSelect(event: Event) {
       <FieldEditor v-if="schema && selectedFieldKey" :show="showFieldEditor" :schema="schema"
         :field-key="selectedFieldKey" :backup-field="backupField" @update:show="(val) => (showFieldEditor = val)"
         @update-schema="handleUpdateSchema" @confirm="onConfirm" @cancel="onCancel" @reset="onReset" />
-
-      <PatchPreviewModal :show="isPatchModalOpen" :patch="pendingPatch" :schema="schema"
+      <!-- Patch 操作决策预览 Modal -->
+      <PatchPreviewModal :show="isPatchModalOpen" :patch="pendingPatch" :schema="schema" :validation="pendingPatch?.validation"
         @update:show="(val) => (isPatchModalOpen = val)" @confirm="confirmPatch" @cancel="cancelPatch" />
 
       <!-- 版本冲突对话框（组件化，便于样式定制，与 PatchPreviewModal 保持一致的组件模式） -->

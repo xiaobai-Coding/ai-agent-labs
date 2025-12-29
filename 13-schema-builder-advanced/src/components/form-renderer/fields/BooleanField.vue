@@ -15,12 +15,12 @@ interface SchemaField {
 }
 
 const props = defineProps<{
-  modelValue: Primitive
+  modelValue: boolean | undefined
   field: SchemaField
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: Primitive): void
+  (e: 'update:modelValue', value: boolean | undefined): void
 }>()
 
 const localValue = computed({

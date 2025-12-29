@@ -63,7 +63,6 @@ const PATCH_UPDATE_PROMPT = `
       "type": "string | number | boolean | select",
       "required": boolean,
       "default": any,
-      "enum": string[] | null
     }
   ]
 }
@@ -73,7 +72,6 @@ const PATCH_UPDATE_PROMPT = `
 - meta.version 表示当前 Schema 的版本号
 - fields 是字段数组
 - 每个字段通过 name 唯一标识
-
 【输入】
 你将收到两部分输入：
 1. current_schema：当前完整的 Schema JSON（包含 meta.version）
@@ -90,7 +88,10 @@ const PATCH_UPDATE_PROMPT = `
 ---
 
 【Patch 输出格式（必须严格遵守）】
-
+- 只有当字段type类型为需要用户选择时，如select,才需要提供enum, 其他类型的字段无需enum
+- 枚举值必须为数组，数组元素为字符串
+- 枚举值必须为数组，数组元素为字符串
+- 最终只能输出JSON格式，不要包含任何其他内容
 你必须返回一个 JSON 对象，结构如下：
 
 {
@@ -174,7 +175,6 @@ const PATCH_UPDATE_PROMPT = `
         "type": "string",
         "required": false,
         "default": "",
-        "enum": null
       }
     }
   ]
@@ -221,17 +221,12 @@ const PATCH_UPDATE_PROMPT = `
 
 ---
 
-【异常情况处理】
-
-如果用户需求无法安全映射到当前 Schema 结构，
-请返回：
-
-{
-  "baseVersion": number,
-  "summary": "No-op",
-  "operations": [],
-  "error": "无法基于当前 Schema 结构完成该修改"
-}
+【异常情况处理（重要）】
+- 你不要因为“字段不存在”就返回 error 或清空 operations。
+- 如果用户明确要修改某个字段（例如 email），即使当前 schema 中不存在该字段，你也应该生成对应的 update 操作：
+  - 系统会在后续校验阶段判断该字段是否存在，并在 Patch Preview 中标记为“将跳过 + 原因”。
+- 只有当用户指令与表单/Schema 完全无关时，才允许返回：
+  { "operations": [], "error": "..." }
 
 ---
 

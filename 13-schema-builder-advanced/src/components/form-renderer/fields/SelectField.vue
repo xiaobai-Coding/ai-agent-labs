@@ -22,12 +22,12 @@ interface SchemaField {
 }
 
 const props = defineProps<{
-  modelValue: Primitive
+  modelValue: string | null | undefined
   field: SchemaField
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: Primitive): void
+  (e: 'update:modelValue', value: string | null | undefined): void
 }>()
 
 const options = computed(() => (props.field.enum ?? []).map((item) => ({ label: item, value: item })))

@@ -20,10 +20,22 @@ interface DiffItem {
   text: string
 }
 
+import type { OpDecision } from '../utils/types'
+import type { PatchModelOutput } from '../utils/validatePatch'
+
 const props = defineProps<{
   show: boolean
   patch: Patch | null
   schema: any | null
+  validation?: {
+    ok: boolean
+    baseVersion?: number
+    summary?: string
+    modelError?: string
+    validOps: any[]
+    invalidOps: Array<{ op: any; reason: string }>
+    stats: { total: number; valid: number; invalid: number }
+  } | null
 }>()
 
 const emit = defineEmits<{
@@ -102,12 +114,43 @@ function formatValue(val: any): string {
 
 const diffItems = computed(() => buildPatchDiffSummary(props.schema, props.patch))
 
+const validation = computed(() => props.validation)
+console.log('validation in modal', validation.value)
+
+const appliedCount = computed(() => validation.value?.stats.valid ?? 0)
+const skippedCount = computed(() => validation.value?.stats.invalid ?? 0)
+
+// whether the Apply button should be disabled
+const isApplyDisabled = computed(() => appliedCount.value <= 0)
+
+function getOpText(op: any): string {
+  if (op.op === 'add' && op.target === 'field') {
+    return `新增字段：${op.value?.label || op.value?.name || '未知'}（type=${op.value?.type || 'unknown'}）`
+  }
+  if (op.op === 'update' && op.target === 'field') {
+    const changedProps = Object.keys(op.value || {}).join('、')
+    return `修改字段：${op.name}（修改了：${changedProps}）`
+  }
+  if (op.op === 'update' && op.target === 'schema') {
+    const changedProps = Object.keys(op.value || {}).join('、')
+    return `修改 Schema（修改了：${changedProps}）`
+  }
+  if (op.op === 'remove' && op.target === 'field') {
+    return `删除字段：${op.name}`
+  }
+  return `未知操作：${op.op}`
+}
+
 const isVersionMismatch = computed(() => {
   if (!props.patch || !props.schema) return false
   const base = (props.patch as any).baseVersion ?? null
   const current = props.schema?.meta?.version ?? null
   return base !== null && current !== null && base !== current
 })
+
+// friendly versions for template (avoid TS assertions inside template)
+const patchBaseVersion = computed(() => (validation.value?.baseVersion ?? 'unknown'))
+const schemaCurrentVersion = computed(() => (props.schema?.version ?? 'unknown'))
 
 // 原有 patchItems（用于展示原始 patch 操作）
 const patchItems = computed(() => {
@@ -152,6 +195,10 @@ const patchItems = computed(() => {
 })
 
 function handleConfirm() {
+  // safety: prevent confirm if there is nothing to apply
+  if (appliedCount.value <= 0) {
+    return
+  }
   emit('confirm')
   emit('update:show', false)
 }
@@ -183,7 +230,7 @@ function handleCancel() {
           <h3>请确认以下变更</h3>
           <p class="subtitle">以下变更将应用到当前 Schema</p>
           <p class="meta" v-if="props.patch && props.schema">
-            Patch 基于版本：{{ props.patch.baseVersion ?? 'unknown' }} · 当前 Schema 版本：{{ props.schema.meta?.version ?? 'unknown' }}
+            Patch 基于版本：{{ patchBaseVersion }} · 当前 Schema 版本：{{ schemaCurrentVersion }}
           </p>
         </div>
         <button class="close-btn" @click="handleCancel">×</button>
@@ -212,23 +259,48 @@ function handleCancel() {
         <p v-else class="empty-hint">未检测到任何有效修改</p>
       </div>
 
-      <!-- 原有 Patch 操作列表 -->
+      <!-- 操作决策列表 -->
+      <div class="decision-summary" style="padding: 12px 20px; border-bottom: 1px solid rgba(99,102,241,0.06); display:flex; gap:12px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div style="background:#ecfdf5; color:#16a34a; padding:6px 10px; border-radius:8px; font-weight:600;">将应用 {{ appliedCount }} 条</div>
+          <div style="background:#fff7ed; color:#d97706; padding:6px 10px; border-radius:8px; font-weight:600;">将跳过 {{ skippedCount }} 条</div>
+        </div>
+        <div style="margin-left:auto; color:#64748b; font-size:13px;">按操作顺序展示</div>
+      </div>
+
+      <!-- Patch 操作详情 -->
       <div class="patch-list">
         <div class="section-title">Patch 操作详情</div>
-        <template v-if="patchItems.length > 0">
+        <template v-if="validation && (validation.validOps.length > 0 || validation.invalidOps.length > 0)">
+          <!-- Valid operations -->
           <div
-            v-for="item in patchItems"
-            :key="item.key"
+            v-for="(op, idx) in validation.validOps"
+            :key="`valid-${idx}`"
             class="patch-item"
-            :class="item.type"
           >
-            <span class="op-icon">
-              <template v-if="item.type === 'add_field'">＋</template>
-              <template v-else-if="item.type === 'update_field' || item.type === 'update_schema'">✎</template>
-              <template v-else-if="item.type === 'remove_field'">－</template>
-              <template v-else>?</template>
+            <span class="op-icon" style="background: linear-gradient(135deg,#22c55e 0%,#16a34a 100%);">
+              ✅
             </span>
-            <span class="op-text">{{ item.text }}</span>
+            <div style="flex:1">
+              <div class="op-text">{{ getOpText(op) }}</div>
+            </div>
+          </div>
+
+          <!-- Invalid operations -->
+          <div
+            v-for="(invalid, idx) in validation.invalidOps"
+            :key="`invalid-${idx}`"
+            class="patch-item"
+          >
+            <span class="op-icon" style="background: linear-gradient(135deg,#f59e0b 0%,#d97706 100%);">
+              ⚠️
+            </span>
+            <div style="flex:1">
+              <div class="op-text">{{ getOpText(invalid.op) }}</div>
+              <div style="font-size:12px; color:#b45309; margin-top:6px;">
+                跳过原因：{{ invalid.reason }}
+              </div>
+            </div>
           </div>
         </template>
         <p v-else class="empty">暂无操作</p>
@@ -236,8 +308,8 @@ function handleCancel() {
 
       <div class="modal-footer">
         <button class="btn btn-ghost" @click="handleCancel">取消</button>
-        <button class="btn btn-primary" @click="handleConfirm">
-          应用修改
+        <button class="btn btn-primary" :disabled="isApplyDisabled" @click="handleConfirm">
+          Apply ({{ appliedCount }}) 
         </button>
       </div>
     </div>
@@ -520,6 +592,14 @@ function handleCancel() {
 .btn-primary:hover {
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
   transform: translateY(-1px);
+}
+
+.btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-icon {

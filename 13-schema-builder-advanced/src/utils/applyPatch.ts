@@ -1,55 +1,30 @@
-interface Field {
-  name: string;
-  label: string;
-  type: "string" | "number" | "boolean" | "select";
-  required: boolean;
-  default: any;
-  enum: string[] | null;
-}
-
-interface Schema {
-  meta?: { version: number };
-  title: string;
-  description: string;
-  fields: Field[];
-}
-
-interface PatchOperation {
-  op: "add" | "update" | "remove";
-  target: "schema" | "field";
-  name?: string;
-  value?: any;
-}
-
-interface Patch {
-  baseVersion?: number;
-  operations: PatchOperation[];
-}
+import type { SchemaState, PatchOp, SchemaField } from './validatePatch'
 
 // 深拷贝工具，避免直接修改原对象
-function cloneSchema(schema: Schema): Schema {
+function cloneSchema(schema: SchemaState): SchemaState {
   return JSON.parse(JSON.stringify(schema));
 }
 
-// 兼容性 applyPatch：仅执行操作，不处理版本号（保留旧逻辑）
-export function applyPatch(schema: Schema, patch: Patch): Schema {
-  if (!patch || !Array.isArray(patch.operations)) {
-    throw new Error("无效的 patch：operations 必须是数组");
+// 简化的 applyPatch：仅执行操作数组，不处理版本号
+export function applyPatch(schema: SchemaState, ops: PatchOp[]): SchemaState {
+  if (!Array.isArray(ops)) {
+    throw new Error("无效的 ops：必须是数组");
+  }
+
+  if (ops.length === 0) {
+    return cloneSchema(schema);
   }
 
   let nextSchema = cloneSchema(schema);
 
-  for (const op of patch.operations) {
-    const { op: opType, target, name, value } = op;
-
-    if (!opType || !target) {
-      throw new Error("无效的 PatchOperation：缺少 op 或 target");
-    }
+  for (const op of ops) {
+    const { op: opType, target } = op;
 
     if (opType === "add") {
       if (target !== "field") {
         throw new Error('ADD 操作目前仅支持 target = "field"');
       }
+      const { value } = op;
       if (!value) {
         throw new Error("ADD 操作必须提供 value");
       }
@@ -62,13 +37,14 @@ export function applyPatch(schema: Schema, patch: Patch): Schema {
       }
       nextSchema = {
         ...nextSchema,
-        fields: [...nextSchema.fields, value as Field]
+        fields: [...nextSchema.fields, value]
       };
       continue;
     }
 
     if (opType === "update") {
       if (target === "field") {
+        const { name, value } = op;
         if (!name) {
           throw new Error("UPDATE field 时必须提供 name");
         }
@@ -82,7 +58,7 @@ export function applyPatch(schema: Schema, patch: Patch): Schema {
         const updatedField = {
           ...nextSchema.fields[index],
           ...value
-        };
+        } as SchemaField;
         const newFields = [...nextSchema.fields];
         newFields[index] = updatedField;
         nextSchema = {
@@ -90,19 +66,14 @@ export function applyPatch(schema: Schema, patch: Patch): Schema {
           fields: newFields
         };
       } else if (target === "schema") {
+        const { value } = op;
         if (!value || typeof value !== "object") {
           throw new Error("UPDATE schema 时必须提供有效的 value 对象");
         }
-        const allowedKeys: Array<keyof Schema> = ["title", "description"];
-        const updates: Partial<Schema> = {};
-        for (const key of allowedKeys) {
-          if (key in value) {
-            (updates as any)[key] = value[key];
-          }
-        }
         nextSchema = {
           ...nextSchema,
-          ...updates
+          title: value.title ?? nextSchema.title,
+          description: value.description ?? nextSchema.description
         };
       } else {
         throw new Error(`不支持的 UPDATE target：${target}`);
@@ -114,6 +85,7 @@ export function applyPatch(schema: Schema, patch: Patch): Schema {
       if (target !== "field") {
         throw new Error('REMOVE 操作目前仅支持 target = "field"');
       }
+      const { name } = op;
       if (!name) {
         throw new Error("REMOVE field 时必须提供 name");
       }
@@ -132,12 +104,17 @@ export function applyPatch(schema: Schema, patch: Patch): Schema {
     throw new Error(`不支持的操作类型：${opType}`);
   }
 
+  // 应用操作后，如果 schema 有版本号，则递增
+  if (nextSchema.version !== undefined) {
+    nextSchema.version += 1;
+  }
+
   return nextSchema;
 }
 
-// 安全应用：校验 baseVersion 与当前 schema.meta.version 匹配，匹配后应用并将 version +1
-export function applyPatchSafe(schema: Schema, patch: Patch): Schema {
-  const currentVersion = schema?.meta?.version ?? 1;
+// 安全应用：校验 baseVersion 与当前 schema.version 匹配，匹配后应用
+export function applyPatchSafe(schema: SchemaState, patch: { baseVersion?: number; operations: PatchOp[] }): SchemaState {
+  const currentVersion = schema?.version ?? 1;
   const baseVersion = patch?.baseVersion ?? 1;
 
   if (currentVersion !== baseVersion) {
@@ -148,10 +125,6 @@ export function applyPatchSafe(schema: Schema, patch: Patch): Schema {
     throw err;
   }
 
-  // 调用现有 applyPatch 执行变更
-  const applied = applyPatch(schema, patch);
-  const next = cloneSchema(applied);
-  // 确保 meta 存在并递增
-  next.meta = { ...(next.meta || {}), version: (schema?.meta?.version ?? 1) + 1 };
-  return next;
+  // 调用 applyPatch 执行变更
+  return applyPatch(schema, patch.operations);
 }
