@@ -101,6 +101,10 @@ const inputPlaceholder = computed(() => {
 • 创建一个注册表单：姓名、邮箱、手机号，手机号需要正则校验
 • 在当前表单中新增一个"手机号"字段，必填`
 })
+
+defineExpose({
+  getUserPrompt: () => userPrompt.value
+})
 </script>
 
 <template>

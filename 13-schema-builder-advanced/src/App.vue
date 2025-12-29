@@ -16,9 +16,12 @@ import { callDeepSeekAPI } from './services/aiService'
 import { ClassifierPrompt, getSchemaPrompt } from './prompts/schemaPrompt';
 import { applyPatchSafe } from './utils/applyPatch'
 import { validatePatch } from './utils/validatePatch'
+import { shouldClarify, isVagueOptimizeInput } from './utils/intentGuard'
+import type { ClarifyInfo } from './types/intent'
 import { applyPatchPartial } from './utils/applyPatchPartial'
 
 
+const promptInputRef = ref<any>(null) // 用于获取 PromptInput 组件实例
 const themeOverrides = {
   common: {
     primaryColor: '#6366f1',
@@ -111,6 +114,10 @@ const { message, dialog } = createDiscreteApi(['message', 'dialog'])
 // 版本冲突对话控制（使用组件化的 NDialog）
 const showVersionMismatchDialog = ref(false)
 const versionMismatchInfo = ref<{ current: number; base: number }>({ current: 1, base: 1 })
+
+// Intent 澄清模式状态
+const clarifyVisible = ref(false)
+const clarifyInfo = ref<ClarifyInfo | null>(null)
 
 // Patch 历史记录（最多 5 条）
 interface PatchHistoryRecord {
@@ -300,7 +307,98 @@ async function validateAndApplySchema(text: string) {
     parseError.value = err.message
   }
 }
-// 从 AI 生成用户意图，并根据意图生成 Schema
+// 基于当前schema进行修改
+async function onClarifyChoosePatch() {
+  const promptInput = promptInputRef.value
+  if (!promptInput) return
+
+  // PATCH 必须有 schema
+  if (!schema.value) {
+    message.warning('当前没有可修改的 Schema，请先生成一份表单。')
+    clarifyVisible.value = false
+    clarifyInfo.value = null
+    return
+  }
+
+  const raw = promptInput.getUserPrompt().trim()
+  if (!raw) return
+
+  // 清理澄清状态
+  clarifyVisible.value = false
+  clarifyInfo.value = null
+
+  // 关键：把“选择 PATCH”变成明确指令，避免模糊输入导致模型误走“全量重写”倾向
+  const vague = isVagueOptimizeInput(raw)
+
+// 关键：如果用户输入很泛化，不要把 raw 当成明确需求，而要改写成“保守优化”的指令
+const patchInstruction = [
+  '请基于当前表单 Schema 做增量修改（PATCH_UPDATE）。',
+  '要求：只输出 patch operations；不要返回完整 schema；不要重新生成整份表单。',
+  `当前表单用途（仅供你理解业务方向）：${schema.value?.title || ''} / ${schema.value?.description || ''}`,
+  '输出格式要求：只能输出JSON格式，不要包含任何其他内容',
+  '',
+  vague
+    ? [
+        '用户输入较泛化（例如“优化一下”）。请只做“保守且可解释”的增量优化：',
+        '1) 仅允许 update 操作（优先），除非当前 schema 明显缺少必要字段才允许 add',
+        '2) 可以优化 title/description 的措辞，使其更清晰但不要改变业务方向',
+        '3) 可以优化字段 label/required/default（如果明显不合理）',
+        '4) 不要删除字段；不要重排 fields 顺序；不要新增与业务无关字段',
+        `用户原话：${raw}`
+      ].join('\n')
+    : `用户修改需求：${raw}`
+].join('\n')
+
+  await generateSchema(patchInstruction, 'PATCH_UPDATE')
+}
+// 重新生成一份新的Schema
+async function onClarifyChooseRegenerate() {
+  const promptInput = promptInputRef.value
+  if (!promptInput) return
+
+  const raw = promptInput.getUserPrompt().trim()
+  if (!raw) return
+
+  clarifyVisible.value = false
+  clarifyInfo.value = null
+
+  // 基于当前 schema 重新生成一个更合理版本
+  const regenerateInstruction = `
+你是一个表单 Schema 生成器。
+请基于【当前 Schema】重新生成一份“更合理、更清晰”的 Schema（相当于推倒重来但保留业务方向）。
+要求：
+1) 输出完整 Schema JSON
+2) 不要把用户输入的短句当成标题（例如“优化一下”）
+3) 生成的 title/description 要符合表单真实用途
+4) 字段可以调整/补全/重命名，但保持与当前表单的业务方向一致
+
+【当前 Schema】
+${JSON.stringify(schema.value, null, 2)}
+
+【用户补充说明（可能很模糊，仅供参考）】
+${raw}
+`.trim()
+
+  await generateSchema(regenerateInstruction, 'REGENERATE')
+}
+
+// 澄清模式下，解释更多信息
+function onClarifyExplainMore() {
+  // 清理澄清状态
+  clarifyVisible.value = false
+  clarifyInfo.value = null
+
+  // 聚焦输入框
+  nextTick(() => {
+    const inputElement = document.querySelector('.n-input__textarea-el') as HTMLTextAreaElement
+    if (inputElement) {
+      inputElement.focus()
+      inputElement.select()
+    }
+  })
+}
+
+// 1.--------------------------------从 AI 生成用户意图，并根据意图生成 Schema--------------------------------
 async function handleGenerate(userPrompt: string) {
   // 当存在未处理的 Patch 预览时，禁止再次触发 AI Patch
   if (isPatchModalOpen.value || pendingPatch.value) {
@@ -311,15 +409,37 @@ async function handleGenerate(userPrompt: string) {
   if (generatePhase.value === 'done' || generatePhase.value === 'error') {
     generatePhase.value = 'idle'
   }
+  // 构建 prompt 参数
+  const promptParams = {
+    has_schema: !!schema.value,
+    user_input: userPrompt
+  }
   try {
     generatePhase.value = 'classifying'
-    const classification: any = await callDeepSeekAPI(userPrompt, ClassifierPrompt)
+    const classification: any = await callDeepSeekAPI(JSON.stringify(promptParams), ClassifierPrompt)
     if (classification && classification.error) {
       parseError.value = classification.error
       generatePhase.value = 'error'
       message.error(classification.error)
       return
     }
+
+    // Intent Guard: 检查是否需要澄清意图
+    const intentResult = { intent: classification.intent, confidence: classification.confidence || 0 }
+    const guardResult = shouldClarify(intentResult)
+
+    if (guardResult.needClarify) {
+      // 进入澄清模式
+      clarifyVisible.value = true
+      clarifyInfo.value = {
+        intent: intentResult.intent,
+        confidence: intentResult.confidence,
+        reason: guardResult.reason
+      }
+      generatePhase.value = 'idle'
+      return
+    }
+
     await generateSchema(userPrompt, classification.intent)
     generatePhase.value = 'done'
   } catch (err: any) {
@@ -328,7 +448,7 @@ async function handleGenerate(userPrompt: string) {
   }
 }
 
-// 根据用户意图生成 Schema（或对现有 Schema 做 PATCH）
+// 2.--------------------------------根据用户意图生成 Schema（或对现有 Schema 做 PATCH）--------------------------------
 const generateSchema = async (userPrompt: string, intent: string) => {
   try {
     let result: any
@@ -351,7 +471,6 @@ ${userPrompt}
       generatePhase.value = 'generating'
       result = await callDeepSeekAPI(userPrompt, getSchemaPrompt(intent))
     }
-    console.log(result)
     if (result && result.error) {
       parseError.value = result.error
       generatePhase.value = 'error'
@@ -381,6 +500,7 @@ ${userPrompt}
       showFieldEditor.value = false
       backupField.value = null
       highlightMap.value = { added: [], updated: [] }
+      generatePhase.value = 'done'
     }
 
     parseError.value = ''
@@ -671,8 +791,63 @@ function handleFileSelect(event: Event) {
 <template>
   <NConfigProvider :theme-overrides="themeOverrides">
     <main class="layout">
-      <PromptInput :on-generate="handleGenerate" :has-schema="!!schema" :phase="generatePhase"
+      <PromptInput ref="promptInputRef" :on-generate="handleGenerate" :has-schema="!!schema" :phase="generatePhase"
         @generate="handleGenerate" />
+
+      <!-- Intent 澄清模式 UI -->
+      <div v-if="clarifyVisible && clarifyInfo" class="clarify-section">
+        <div class="clarify-card">
+          <div class="clarify-header">
+            <div class="clarify-icon">
+              <span class="clarify-sparkle">💭</span>
+            </div>
+            <div class="clarify-title">
+              <h4>意图需要澄清</h4>
+              <p class="clarify-subtitle">AI 对你的需求判断不是很确定</p>
+            </div>
+          </div>
+
+          <div class="clarify-content">
+            <div class="clarify-info">
+              <div class="info-item">
+                <span class="info-label">当前判断：</span>
+                <span class="info-value intent">{{ clarifyInfo.intent }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">置信度：</span>
+                <span class="info-value confidence">{{ (clarifyInfo.confidence * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="info-reason">
+                {{ clarifyInfo.reason }}
+              </div>
+            </div>
+
+            <div class="clarify-options">
+              <p class="options-title">请选择你的真实意图：</p>
+              <div class="clarify-buttons">
+                <NButton type="primary" @click="onClarifyChoosePatch" class="option-btn">
+                  <template #icon>
+                    <span class="btn-icon">✏️</span>
+                  </template>
+                  基于当前表单修改
+                </NButton>
+                <NButton type="info" @click="onClarifyChooseRegenerate" class="option-btn">
+                  <template #icon>
+                    <span class="btn-icon">🔄</span>
+                  </template>
+                  重新生成一份
+                </NButton>
+                <NButton ghost @click="onClarifyExplainMore" class="option-btn">
+                  <template #icon>
+                    <span class="btn-icon">💬</span>
+                  </template>
+                  我补充说明
+                </NButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Patch 历史记录（仅显示最近一条） -->
       <div v-if="patchHistory.length > 0" class="history-hint" @click="showHistoryDrawer = true">
@@ -1005,6 +1180,184 @@ h2 {
   padding: 40px 0;
   color: #94a3b8;
   font-size: 14px;
+}
+
+/* Clarify Mode Styles */
+.clarify-section {
+  margin: 16px 0;
+  padding: 0 20px;
+}
+
+.clarify-card {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.03) 0%, rgba(139, 92, 246, 0.01) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.06);
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+
+.clarify-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(139, 92, 246, 0.03) 100%);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.08);
+}
+
+.clarify-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.clarify-sparkle {
+  font-size: 16px;
+  color: #fff;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.clarify-title h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.clarify-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.clarify-content {
+  padding: 16px 20px;
+}
+
+.clarify-info {
+  margin-bottom: 20px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.info-label {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+  min-width: 70px;
+}
+
+.info-value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.info-value.intent {
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.info-value.confidence {
+  color: #059669;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.info-reason {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+  padding: 8px 12px;
+  background: rgba(107, 114, 128, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid #6b7280;
+}
+
+.options-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px;
+}
+
+.clarify-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.option-btn {
+  flex: 1;
+  min-width: 140px;
+  justify-content: flex-start;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border-radius: 8px;
+}
+
+.option-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .clarify-section {
+    padding: 0 16px;
+  }
+
+  .clarify-header {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .clarify-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .clarify-title h4 {
+    font-size: 15px;
+  }
+
+  .clarify-subtitle {
+    font-size: 12px;
+  }
+
+  .clarify-content {
+    padding: 12px 16px;
+  }
+
+  .clarify-buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .option-btn {
+    width: 100%;
+    min-width: unset;
+  }
+}
+
+.btn-icon {
+  font-size: 14px;
+  margin-right: 4px;
 }
 
 @media (max-width: 900px) {
