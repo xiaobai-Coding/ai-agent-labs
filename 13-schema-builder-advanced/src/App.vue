@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // @ts-nocheck
 import { ref, watch, nextTick } from 'vue'
-import { NConfigProvider, NInput, NAlert, NButton, NDrawer, NDrawerContent, NDropdown, createDiscreteApi, NDialog } from 'naive-ui'
+import { NConfigProvider, NInput, NAlert, NButton, NDrawer, NDrawerContent, NDropdown, NTag, createDiscreteApi, NDialog } from 'naive-ui'
 // @ts-ignore vue shim
 import PromptInput from './components/PromptInput.vue'
 // @ts-ignore vue shim
@@ -17,6 +17,7 @@ import { ClassifierPrompt, getSchemaPrompt } from './prompts/schemaPrompt';
 import { applyPatchSafe } from './utils/applyPatch'
 import { validatePatch } from './utils/validatePatch'
 import { shouldClarify, isVagueOptimizeInput } from './utils/intentGuard'
+import { buildImpactFromOps, buildStandardSummary } from './utils/patchSummary'
 import type { ClarifyInfo } from './types/intent'
 import { applyPatchPartial } from './utils/applyPatchPartial'
 
@@ -127,17 +128,53 @@ interface PatchHistoryRecord {
   patch: any
   beforeSchema: any
   afterSchema: any
+  // extended metadata
+  source?: 'AI' | 'MANUAL' | 'IMPORT' | 'ROLLBACK'
+  baseVersion?: number
+  toVersion?: number
+  impact?: { added: string[]; updated: string[]; removed: string[] }
+  counts?: { added: number; updated: number; removed: number; validOps: number; skippedOps: number }
 }
 
 const PATCH_HISTORY_KEY = 'ai-schema-builder-patch-history'
 const patchHistory = ref<PatchHistoryRecord[]>([])
+const expandedRecordIds = ref<Record<string, boolean>>({})
 
 // 从 localStorage 恢复历史
 function loadPatchHistory() {
   try {
     const stored = localStorage.getItem(PATCH_HISTORY_KEY)
     if (stored) {
-      patchHistory.value = JSON.parse(stored)
+      const rawList = JSON.parse(stored)
+      // normalize legacy records
+      patchHistory.value = rawList.map((r: any) => {
+        const rec: PatchHistoryRecord = {
+          id: r.id || `${r.timestamp || Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          timestamp: r.timestamp || Date.now(),
+          summary: r.summary || '',
+          patch: r.patch || {},
+          beforeSchema: r.beforeSchema || null,
+          afterSchema: r.afterSchema || null,
+          source: r.source || 'AI',
+          baseVersion: r.baseVersion ?? r.patch?.baseVersion ?? r.beforeSchema?.meta?.version ?? 0,
+          toVersion: r.toVersion ?? r.afterSchema?.meta?.version ?? r.beforeSchema?.meta?.version ?? 0,
+          impact: r.impact || buildImpactFromOps(r.patch?.operations || []),
+          counts:
+            r.counts ||
+            {
+              added: (r.impact?.added?.length ?? (r.patch?.operations || []).filter((o: any) => o.op === 'add').length) || 0,
+              updated: (r.impact?.updated?.length ?? (r.patch?.operations || []).filter((o: any) => o.op === 'update').length) || 0,
+              removed: (r.impact?.removed?.length ?? (r.patch?.operations || []).filter((o: any) => o.op === 'remove').length) || 0,
+              validOps: r.counts?.validOps ?? (r.patch?.operations?.length ?? 0),
+              skippedOps: r.counts?.skippedOps ?? 0
+            }
+        }
+        // ensure summary exists
+        if (!rec.summary) {
+          rec.summary = buildStandardSummary(rec.impact || { added: [], updated: [], removed: [] }, rec.beforeSchema, rec.afterSchema)
+        }
+        return rec
+      })
     }
   } catch (e) {
     console.error('加载 Patch 历史失败', e)
@@ -169,9 +206,13 @@ function rollbackTo(record: PatchHistoryRecord) {
     message.warning('当前有待确认的 Patch，请先处理后再回滚')
     return
   }
+  const added = record.counts?.added ?? record.impact?.added?.length ?? 0
+  const updated = record.counts?.updated ?? record.impact?.updated?.length ?? 0
+  const removed = record.counts?.removed ?? record.impact?.removed?.length ?? 0
+  const content = `将从 v${record.toVersion ?? 0} 回滚到 v${record.baseVersion ?? 0}。影响：新增 ${added} 个，修改 ${updated} 个，删除 ${removed} 个。确定要回滚吗？`
   dialog.warning({
     title: '确认回滚',
-    content: `确定要回滚到「${record.summary}」之前的状态吗？`,
+    content,
     positiveText: '确认回滚',
     negativeText: '取消',
     positiveButtonProps: {
@@ -241,6 +282,13 @@ loadPatchHistory()
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj))
+}
+
+function toggleRecord(id: string) {
+  expandedRecordIds.value[id] = !expandedRecordIds.value[id]
+}
+function isExpanded(id: string) {
+  return !!expandedRecordIds.value[id]
 }
 
 
@@ -558,19 +606,34 @@ function confirmPatch() {
     schemaText.value = JSON.stringify(nextSchema, null, 2)
     highlightMap.value = { added: appliedFieldNames, updated: appliedFieldNames }
 
-    // Write history
+    // Build impact & summary, then write history
+    const impact = buildImpactFromOps(validation.validOps || patch.operations || [])
+    const counts = {
+      added: impact.added.length,
+      updated: impact.updated.length,
+      removed: impact.removed.length,
+      validOps: validation.stats?.valid ?? (validation.validOps?.length ?? 0),
+      skippedOps: validation.stats?.invalid ?? 0
+    }
+    const summary = buildStandardSummary(impact, beforeSchema, nextSchema)
+
     addPatchHistory({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       timestamp: Date.now(),
-      summary: validation.summary || `${validation.stats.valid} 项修改`,
+      summary,
       patch: deepClone(patch),
       beforeSchema,
-      afterSchema: deepClone(nextSchema)
+      afterSchema: deepClone(nextSchema),
+      source: 'AI',
+      baseVersion: validation.baseVersion ?? patch.baseVersion ?? beforeSchema?.meta?.version ?? 0,
+      toVersion: nextSchema?.meta?.version ?? 0,
+      impact,
+      counts
     })
 
     // Toast / message
-    const skippedNote = validation.stats.invalid > 0 ? `，${validation.stats.invalid} 条已跳过` : ''
-    message.success(`已应用：${validation.summary || validation.stats.valid + ' 项'}${skippedNote}`, { duration: 4000 })
+    const skippedNote = (validation.stats?.invalid ?? 0) > 0 ? `，${validation.stats.invalid} 条已跳过` : ''
+    message.success(`已应用：${summary}${skippedNote}`, { duration: 4000 })
 
     // cleanup
     setTimeout(() => {
@@ -915,23 +978,36 @@ function handleFileSelect(event: Event) {
                 <span class="history-item-summary">{{ record.summary }}</span>
                 <span class="history-item-time">{{ formatTime(record.timestamp) }}</span>
               </div>
-              <div class="history-item-diff">
-                <template v-if="getPatchDiff(record.patch).added.length > 0">
-                  <div class="diff-line">
-                    <span class="diff-label">新增字段：</span>
-                    <span class="diff-value">{{ getPatchDiff(record.patch).added.join('、') }}</span>
-                  </div>
-                </template>
-                <template v-if="getPatchDiff(record.patch).updated.length > 0">
-                  <div class="diff-line">
-                    <span class="diff-label">修改字段：</span>
-                    <span class="diff-value">{{ getPatchDiff(record.patch).updated.join('、') }}</span>
-                  </div>
-                </template>
+              <div class="history-item-meta">
+                <div class="meta-tags">
+                  <NTag size="small" type="info" style="margin-right:6px">{{ record.source || 'AI' }}</NTag>
+                  <NTag size="small" type="default" style="margin-right:6px">v{{ record.baseVersion ?? 0 }} → v{{ record.toVersion ?? 0 }}</NTag>
+                  <NTag size="small" type="success" style="margin-right:6px">新增 {{ record.counts?.added ?? record.impact?.added?.length ?? 0 }}</NTag>
+                  <NTag size="small" type="warning" style="margin-right:6px">修改 {{ record.counts?.updated ?? record.impact?.updated?.length ?? 0 }}</NTag>
+                  <NTag size="small" type="error">删除 {{ record.counts?.removed ?? record.impact?.removed?.length ?? 0 }}</NTag>
+                </div>
+                <div class="meta-actions" style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+                  <NButton size="tiny" tertiary @click="toggleRecord(record.id)">{{ isExpanded(record.id) ? '收起详情' : '展开详情' }}</NButton>
+                  <NButton size="small" quaternary type="primary" class="history-item-rollback" @click="rollbackTo(record)">
+                    <div style="color: #fff;">回滚</div>
+                  </NButton>
+                </div>
               </div>
-              <NButton size="small" quaternary type="primary" class="history-item-rollback" @click="rollbackTo(record)">
-                <div style="color: #fff;">回滚</div>
-              </NButton>
+
+              <div v-show="isExpanded(record.id)" class="history-item-details" style="margin-top:8px; font-size:13px; color:#475569;">
+                <div v-if="record.impact?.added && record.impact.added.length > 0" class="diff-line">
+                  <strong>新增：</strong> {{ record.impact.added.join('、') }}
+                </div>
+                <div v-if="record.impact?.updated && record.impact.updated.length > 0" class="diff-line">
+                  <strong>修改：</strong> {{ record.impact.updated.join('、') }}
+                </div>
+                <div v-if="record.impact?.removed && record.impact.removed.length > 0" class="diff-line">
+                  <strong>删除：</strong> {{ record.impact.removed.join('、') }}
+                </div>
+                <div class="diff-line" v-if="record.counts?.skippedOps">
+                  <strong>跳过：</strong> {{ record.counts.skippedOps }} 条
+                </div>
+              </div>
             </div>
             <div v-if="patchHistory.length === 0" class="history-empty">
               暂无修改记录
@@ -1169,8 +1245,7 @@ h2 {
 }
 
 .history-item-rollback {
-  width: 100%;
-  margin-top: 8px;
+  flex: 1;
   color: #fff;
 
 }

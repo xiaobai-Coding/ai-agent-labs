@@ -150,7 +150,7 @@ const isVersionMismatch = computed(() => {
 
 // friendly versions for template (avoid TS assertions inside template)
 const patchBaseVersion = computed(() => (validation.value?.baseVersion ?? 'unknown'))
-const schemaCurrentVersion = computed(() => (props.schema?.version ?? 'unknown'))
+const schemaCurrentVersion = computed(() => (props.schema?.meta?.version ?? 'unknown'))
 
 // 原有 patchItems（用于展示原始 patch 操作）
 const patchItems = computed(() => {
@@ -237,12 +237,11 @@ function handleCancel() {
       </div>
 
       <!-- 版本警示（若 patch 基于的版本与当前 schema 不符） -->
-      <!-- <div class="version-alert" v-if="isVersionMismatch">
+      <div class="version-alert" v-if="isVersionMismatch">
         <NAlert show-icon type="warning" title="版本不匹配">
           <div>该 Patch 基于的版本与当前 Schema 不一致，应用前请确认或重新生成 Patch。</div>
         </NAlert>
-      </div> -->
-
+      </div>
       <!-- 变更摘要区块 -->
       <div class="diff-summary">
         <div class="section-title">变更摘要</div>

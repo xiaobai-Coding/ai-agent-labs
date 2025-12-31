@@ -104,17 +104,15 @@ export function applyPatch(schema: SchemaState, ops: PatchOp[]): SchemaState {
     throw new Error(`不支持的操作类型：${opType}`);
   }
 
-  // 应用操作后，如果 schema 有版本号，则递增
-  if (nextSchema.version !== undefined) {
-    nextSchema.version += 1;
-  }
+  // 应用操作后，递增版本号
+  nextSchema.meta = { ...(nextSchema.meta || {}), version: (nextSchema.meta?.version ?? 1) + 1 }
 
   return nextSchema;
 }
 
 // 安全应用：校验 baseVersion 与当前 schema.version 匹配，匹配后应用
 export function applyPatchSafe(schema: SchemaState, patch: { baseVersion?: number; operations: PatchOp[] }): SchemaState {
-  const currentVersion = schema?.version ?? 1;
+  const currentVersion = schema?.meta?.version ?? 1;
   const baseVersion = patch?.baseVersion ?? 1;
 
   if (currentVersion !== baseVersion) {

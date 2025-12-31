@@ -10,10 +10,10 @@ export interface SchemaField {
 }
 
 export interface SchemaState {
+  meta?: { version: number };
   title: string;
   description?: string;
   fields: SchemaField[];
-  version?: number;
 }
 
 export type PatchOp =
