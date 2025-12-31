@@ -44,7 +44,8 @@ ai-agent-labs/
 ├── 09-RAG-Demo/                   # RAG demo (vector search + similarity)
 ├── 10-Document-RAG-Demo/          # Document parser + AI summary + chunking
 ├── 11-RAG-QA1.0/                  # Complete RAG QA system (embedding + retrieval + MMR + AI QA)
-└── 12-AI-Schema-Builder/          # AI-powered JSON Schema form designer (PATCH & rollback)
+├── 12-AI-Schema-Builder/          # AI-powered JSON Schema form designer (PATCH & rollback)
+└── 13-schema-builder-advanced/    # Advanced AI Schema Builder (Patch validation, partial apply, intent guard)
 ```
 
 ## 🧰 Tools (shared)
@@ -85,8 +86,9 @@ Full docs: [tools/README.md](./tools/README.md)
 - 10 Document RAG Demo (document parser + AI summary + chunking + reference jump)
 - 11 RAG QA 1.0 (complete RAG QA system: embedding + retrieval + MMR + AI QA + multi-reference jump)
 - 12 AI Schema Builder (AI-powered JSON Schema form designer with PATCH & rollback)
+- 13 Advanced AI Schema Builder (AI Schema Builder with patch validation, partial apply, intent guard)
 
-Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system executor, 09→10 RAG pipeline, 11 complete RAG QA, 12 schema + patch workflow.
+Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system executor, 09→10 RAG pipeline, 11 complete RAG QA, 12→13 advanced schema workflow.
 
 ---
 
@@ -127,6 +129,54 @@ Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system execu
 
 📁 Path: `12-AI-Schema-Builder/`
 
+---
+
+### **1️⃣3️⃣ Advanced AI Schema Builder (Advanced AI Schema Builder) ⭐ Enterprise-Grade Patch System**
+
+**The most advanced AI Schema Builder with enterprise-grade patch validation, partial application, and intelligent intent guard mechanisms.**
+
+#### Core Features
+- ✅ **Natural language → JSON Schema generation**: Full generation (FULL_GENERATE) and regeneration (REGENERATE)
+- ✅ **PATCH_UPDATE incremental modification**: Intelligent incremental updates with comprehensive validation
+- ✅ **Advanced Patch Validation Layer**: Structural validation + semantic validation with detailed error reasons
+- ✅ **Partial Patch Application**: Only valid operations are applied, invalid ones are skipped with clear reasons
+- ✅ **Intelligent Intent Guard**: Automatic intent classification with confidence thresholds and user clarification UI
+- ✅ **Patch Preview Modal**: Preview changes with validation results, showing "will apply" vs "will skip"
+- ✅ **Patch History Standardization**: Unified summary format (+/-/~) with comprehensive metadata and impact tracking
+- ✅ **Version Drift Protection**: Schema versioning system prevents applying patches to outdated schemas
+- ✅ **Enhanced Drawer UI**: Detailed patch history with expandable impact details and source/version tags
+- ✅ **One-click rollback**: Rollback with enhanced confirmation dialog showing impact details
+- ✅ **Two-way editing**: Left JSON Schema text editor + Right real-time form preview
+- ✅ **Field-level editor**: Click fields to edit configurations with real-time validation
+- ✅ **Schema import/export**: JSON file import/export with version compatibility
+- ✅ **State-aware UI**: Dynamic status hints and button text based on generation phases
+
+#### Advanced Patch System
+- ✅ **Patch Validation Engine**: Validates operations against current schema with structural and semantic rules
+- ✅ **Partial Application Logic**: Applies only valid operations, generates detailed apply reports
+- ✅ **Intent Classification Guard**: Prevents ambiguous inputs with confidence-based clarification prompts
+- ✅ **Version Conflict Detection**: Prevents applying patches to mismatched schema versions
+- ✅ **Impact Analysis**: Tracks added/updated/removed fields with standardized summary format
+- ✅ **Error Recovery**: Comprehensive error handling with clear user feedback
+
+#### Technical Highlights
+- 🎯 **Enterprise-grade validation**: Structural + semantic validation with detailed error messages
+- 🔄 **Partial application safety**: Only valid operations applied, invalid ones reported with reasons
+- 🛡️ **Intent ambiguity protection**: Confidence-based guard prevents unintended actions
+- 📊 **Comprehensive history**: Standardized summaries with full metadata and impact tracking
+- 🎨 **Professional UI polish**: Consistent design language with enhanced user experience
+- 🔒 **Version safety**: Schema versioning prevents drift and ensures data integrity
+
+#### What to Learn
+- How **enterprise-grade patch validation** works (structural + semantic validation)
+- **Partial application patterns** for safe incremental updates
+- **Intent guard mechanisms** for preventing ambiguous AI actions
+- **Version drift protection** and schema consistency management
+- Advanced **patch history management** with standardized formatting
+- Complete **validation → preview → apply → history** engineering workflow
+
+📁 Path: `13-schema-builder-advanced/`
+
 ## 🚀 Run
 ```bash
 # example 1: latest full travel assistant
@@ -134,8 +184,8 @@ cd 06-Chat-Travel-Assistant
 npm install
 npm run dev
 
-# example 2: AI JSON Schema form designer
-cd 12-AI-Schema-Builder
+# example 2: Advanced AI Schema Builder
+cd 13-schema-builder-advanced
 npm install
 npm run dev
 ```
@@ -159,6 +209,7 @@ VITE_DEEPSEEK_API_KEY=your_api_key_here
 - [x] RAG demo (vector search + similarity)
 - [x] Document parser + AI summary + chunking + reference jump
 - [x] Complete RAG QA system (embedding + retrieval + MMR + AI QA)
+- [x] Advanced AI Schema Builder (patch validation, partial apply, intent guard)
 - [ ] Real weather API
 - [ ] HTTP/fetch tool
 - [ ] Auto parameter inference
@@ -226,7 +277,8 @@ ai-agent-labs/
 ├── 09-RAG-Demo/              # RAG 演示（向量检索 + 相似度匹配）
 ├── 10-Document-RAG-Demo/     # 文档解析 + AI 摘要 + 分块 + 引用跳转
 ├── 11-RAG-QA1.0/             # 完整 RAG 问答系统（向量化 + 检索 + MMR + AI 问答）
-└── 12-AI-Schema-Builder/     # AI JSON Schema 表单设计器（自然语言生成 / PATCH / 回滚）
+├── 12-AI-Schema-Builder/     # AI JSON Schema 表单设计器（自然语言生成 / PATCH / 回滚）
+└── 13-schema-builder-advanced/ # 高级 AI Schema 构建器（Patch 校验、部分应用、智能意图守卫）
 ```
 
 特点：
@@ -518,7 +570,7 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 
 📁 路径：`11-RAG-QA1.0/`
 
-> 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流，08 看系统执行器架构，09→10 看 RAG 完整流程，11 看完整 RAG 问答系统**
+> 💡 **推荐学习路径：01 → 05 打基础，06 看完整场景，07 看任务工作流，08 看系统执行器架构，09→10 看 RAG 完整流程，11 看完整 RAG 问答系统，12→13 看高级 Schema 工作流**
 
 ---
 
@@ -559,11 +611,59 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 
 📁 路径：`12-AI-Schema-Builder/`
 
+---
+
+### **1️⃣3️⃣ 高级 AI Schema 构建器（Advanced AI Schema Builder）⭐ 企业级 Patch 系统**
+
+**最先进的 AI Schema 构建器，配备企业级 patch 校验、部分应用和智能意图守卫机制。**
+
+#### 核心功能
+- ✅ **自然语言生成 JSON Schema**：支持全量生成（FULL_GENERATE）和重新生成（REGENERATE）
+- ✅ **PATCH_UPDATE 增量修改**：智能增量更新，配备全面校验机制
+- ✅ **高级 Patch 校验层**：结构校验 + 语义校验，提供详细错误原因
+- ✅ **部分 Patch 应用**：仅应用有效操作，无效操作跳过并说明原因
+- ✅ **智能意图守卫**：自动意图分类，基于置信度阈值提供用户澄清界面
+- ✅ **Patch 预览 Modal**：预览变更结果，显示"将应用" vs "将跳过"
+- ✅ **Patch 历史标准化**：统一摘要格式（+/-/~）配备全面元数据和影响跟踪
+- ✅ **版本漂移防护**：Schema 版本控制系统，防止将 patch 应用到过期 schema
+- ✅ **增强的 Drawer UI**：详细的 patch 历史，包含可展开的影响详情和来源/版本标签
+- ✅ **一键回滚**：配备增强的确认对话框，显示影响详情
+- ✅ **双向编辑**：左侧 JSON Schema 文本编辑 + 右侧实时表单预览
+- ✅ **字段级编辑器**：点击字段进行配置编辑，支持实时校验
+- ✅ **Schema 导入/导出**：JSON 文件导入导出，支持版本兼容性
+- ✅ **状态感知 UI**：基于生成阶段动态显示状态提示和按钮文案
+
+#### 高级 Patch 系统
+- ✅ **Patch 校验引擎**：针对当前 schema 校验操作，包含结构和语义规则
+- ✅ **部分应用逻辑**：仅应用有效操作，生成详细的应用报告
+- ✅ **意图分类守卫**：防止模糊输入，基于置信度的澄清提示
+- ✅ **版本冲突检测**：防止将 patch 应用到不匹配的 schema 版本
+- ✅ **影响分析**：跟踪增删改字段，配备标准化摘要格式
+- ✅ **错误恢复**：全面错误处理，提供清晰的用户反馈
+
+#### 技术亮点
+- 🎯 **企业级校验**：结构 + 语义校验，提供详细错误信息
+- 🔄 **部分应用安全**：仅应用有效操作，无效操作报告原因
+- 🛡️ **意图模糊防护**：基于置信度的守卫机制防止意外操作
+- 📊 **全面历史记录**：标准化摘要，配备完整元数据和影响跟踪
+- 🎨 **专业 UI 打磨**：一致的设计语言，增强用户体验
+- 🔒 **版本安全**：Schema 版本控制防止漂移，确保数据完整性
+
+#### 适合看什么
+- 学习 **企业级 patch 校验** 如何工作（结构 + 语义校验）
+- 掌握 **部分应用模式** 实现安全的增量更新
+- 理解 **意图守卫机制** 防止模糊的 AI 操作
+- 探索 **版本漂移防护** 和 schema 一致性管理
+- 学习高级 **patch 历史管理** 配备标准化格式
+- 掌握完整的 **校验 → 预览 → 应用 → 历史** 工程工作流
+
+📁 路径：`13-schema-builder-advanced/`
+
 ## 🚀 如何运行
 
 每个项目都是独立可运行的，进入对应目录即可：
 
-### 快速开始（推荐从 06 或 12 开始体验）
+### 快速开始（推荐从 06 或 13 开始体验）
 
 ```bash
 # 进入最新最全的旅行助手项目
@@ -615,8 +715,8 @@ cd 11-RAG-QA1.0
 npm install
 npm run dev
 
-# AI JSON Schema 表单设计器
-cd 12-AI-Schema-Builder
+# 高级 AI Schema 构建器
+cd 13-schema-builder-advanced
 npm install
 npm run dev
 ```
@@ -646,6 +746,7 @@ VITE_DEEPSEEK_API_KEY=your_api_key_here
 * [x] RAG 演示（向量检索 + 相似度匹配）✅
 * [x] 文档解析 + AI 摘要 + 分块 + 引用跳转 ✅
 * [x] 完整 RAG 问答系统（向量化 + 检索 + MMR + AI 问答）✅
+* [x] 高级 AI Schema 构建器（Patch 校验、部分应用、智能意图守卫）✅
 * [ ] 真实天气 API 版本
 * [ ] 真实 HTTP 工具支持（fetchTool）
 * [ ] AI 自动生成工具参数（参数推断）
