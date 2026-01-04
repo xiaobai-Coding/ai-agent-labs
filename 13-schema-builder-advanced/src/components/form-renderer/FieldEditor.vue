@@ -1,12 +1,14 @@
 <template>
-  <NDrawer :show="show" :width="380" placement="right" :mask-closable="false" :close-on-esc="false" @update:show="(val) => emit('update:show', val)">
+  <NDrawer :show="show" :width="380" placement="right" :mask-closable="false" :close-on-esc="false"
+    @update:show="(val) => emit('update:show', val)">
     <NDrawerContent :title="`正在编辑字段 ${fieldKey}`">
       <NForm label-placement="top" :show-require-mark="false" :model="formState">
         <NFormItem label="标题 (label)">
           <NInput :value="formState.label" placeholder="字段标题" @update:value="(v) => (formState.label = v)" />
         </NFormItem>
         <NFormItem label="占位符 (placeholder)">
-          <NInput :value="formState.placeholder" placeholder="占位提示" @update:value="(v) => (formState.placeholder = v)" />
+          <NInput :value="formState.placeholder" placeholder="占位提示"
+            @update:value="(v) => (formState.placeholder = v)" />
         </NFormItem>
         <NFormItem label="默认值 (default)">
           <NInput :value="formState.default" placeholder="默认值" @update:value="(v) => (formState.default = v)" />

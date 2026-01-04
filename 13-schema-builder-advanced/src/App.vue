@@ -773,8 +773,11 @@ function onConfirm(changed?: boolean) {
   // 确认完成后，同步 schemaText
   if (schema.value) {
     let shouldIncrement = false
+    let modifiedFieldName = ''
+
     if (typeof changed === 'boolean') {
       shouldIncrement = changed
+      modifiedFieldName = selectedFieldKey.value || ''
     } else {
       // 兼容老的调用方式：通过比较 backupField 与当前字段判断
       if (selectedFieldKey.value && backupField.value) {
@@ -783,6 +786,7 @@ function onConfirm(changed?: boolean) {
         const beforeStr = JSON.stringify(backupField.value)
         const afterStr = JSON.stringify(currentField)
         shouldIncrement = beforeStr !== afterStr
+        modifiedFieldName = selectedFieldKey.value
       } else {
         shouldIncrement = false
       }
@@ -790,7 +794,54 @@ function onConfirm(changed?: boolean) {
 
     if (shouldIncrement) {
       const currentVer = schema.value?.meta?.version ?? 1
-      schema.value = { ...schema.value, meta: { ...(schema.value.meta || {}), version: currentVer + 1 } }
+      const newVersion = currentVer + 1
+
+      // 保存修改前的 schema（用于历史记录）
+      const beforeSchema = deepClone(schema.value)
+
+      // 应用版本更新
+      schema.value = { ...schema.value, meta: { ...(schema.value.meta || {}), version: newVersion } }
+
+      // 构建修改后的 schema（用于历史记录）
+      const afterSchema = deepClone(schema.value)
+
+      // 构建 impact 和统计信息
+      const impact = { added: [], updated: [modifiedFieldName], removed: [] }
+      const counts = {
+        added: 0,
+        updated: 1,
+        removed: 0,
+        validOps: 1,
+        skippedOps: 0
+      }
+
+      // 生成摘要
+      const summary = buildStandardSummary(impact, beforeSchema, afterSchema)
+
+      // 添加到历史记录
+      addPatchHistory({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: Date.now(),
+        summary,
+        patch: {
+          baseVersion: currentVer,
+          operations: [
+            {
+              op: 'update',
+              target: 'field',
+              name: modifiedFieldName,
+              value: afterSchema.fields.find((f: any) => f.name === modifiedFieldName)
+            }
+          ]
+        },
+        beforeSchema,
+        afterSchema,
+        source: 'MANUAL',
+        baseVersion: currentVer,
+        toVersion: newVersion,
+        impact,
+        counts
+      })
     }
     // 同步编辑器内容（无论是否变更都保持最新 JSON）
     schemaText.value = JSON.stringify(schema.value, null, 2)
