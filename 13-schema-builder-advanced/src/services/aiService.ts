@@ -21,7 +21,7 @@ export async function callDeepSeekAPI(
     { role: "user", content: userPrompt }
   ];
 
-  const useServerApi = import.meta.env.VITE_USE_SERVER_API === true;
+  const useServerApi = import.meta.env.VITE_USE_SERVER_API === "true";
 
   const endpoint = useServerApi
     ? "/api/ai"
@@ -35,6 +35,7 @@ export async function callDeepSeekAPI(
   let headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${config.apiKey}`
+    
   };
   if (useServerApi) {
     headers["X-Client-Token"] = import.meta.env.VITE_CLIENT_TOKEN || "";
