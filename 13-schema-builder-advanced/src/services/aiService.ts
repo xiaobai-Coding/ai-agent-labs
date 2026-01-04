@@ -21,7 +21,7 @@ export async function callDeepSeekAPI(
     { role: "user", content: userPrompt }
   ];
 
-  const useServerApi = import.meta.env.VITE_USE_SERVER_API === "true";
+  const useServerApi = import.meta.env.VITE_USE_SERVER_API === true;
 
   const endpoint = useServerApi
     ? "/api/ai"
