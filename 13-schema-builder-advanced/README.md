@@ -7,7 +7,7 @@ An AI-powered JSON Schema form builder that transforms natural language into **e
 AI Schema Builder is **not** a one-shot AI demo.  
 It is an **engineering-oriented AI system** that demonstrates how to integrate LLMs into real front-end workflows with **control, validation, patching, rollback, and cost protection**.
 
-👉 Live Demo: https://ai-schema-builder-ten.vercel.app/
+👉 Live Demo: https://ai-schema-builder-advanced.vercel.app
 
 ---
 
