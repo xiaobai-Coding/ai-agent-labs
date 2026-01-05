@@ -6,7 +6,7 @@ interface RequestBody {
 }
 
 interface SuccessResponse {
-  status: 'ok';
+  status: 'ok'; 
   data: { embeddings: number[][] };
   meta: {
     provider: string;
