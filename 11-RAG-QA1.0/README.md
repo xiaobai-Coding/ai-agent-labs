@@ -120,23 +120,46 @@ npm install
 在项目根目录创建 `.env.local` 文件，配置 API 密钥：
 
 ```env
-# 阿里云 DashScope Embedding API
-VITE_ALI_API_KEY=your_dashscope_api_key
+# 阿里云 DashScope Embedding API（服务端使用）
+DASHSCOPE_API_KEY=your_dashscope_api_key
+DASHSCOPE_EMBEDDING_MODEL=text-embedding-v3
 
 # DeepSeek API（用于问答和摘要）
 VITE_AI_API_KEY=your_deepseek_api_key
 VITE_AI_API_BASE_URL=https://api.deepseek.com
 ```
 
-**注意**：DashScope Embedding 需要通过代理访问，请确保已配置代理服务。
+**注意**：向量请求已server化，环境变量从 `VITE_ALI_API_KEY` 改为 `DASHSCOPE_API_KEY`（服务端环境变量）。
 
-### 启动开发服务器
+### 本地开发设置
+
+本项目使用 Vercel Serverless Functions 处理 embedding 请求。开发时需要同时启动前端和 API 服务：
+
+#### 方式一：推荐 - 使用 Vercel Dev（全栈开发）
 
 ```bash
+# 安装 Vercel CLI (全局)
+npm install -g vercel
+
+# 启动全栈开发服务器 (API on :3000, 前端 on :5173)
+vercel dev --port 3000
+```
+
+#### 方式二：分别启动
+
+```bash
+# 终端1: 启动 API 服务
+vercel dev --port 3000
+
+# 终端2: 启动前端开发服务器
 npm run dev
 ```
 
-访问 `http://localhost:5173` 查看应用。
+### 访问应用
+
+启动后访问 `http://localhost:5173` 查看应用。
+
+**注意**：如果 API 服务未启动，前端的 embedding 功能将无法工作。
 
 ### 构建生产版本
 
