@@ -66,7 +66,10 @@ async function callEmbeddingAPI(texts: string[], purpose?: 'query' | 'doc'): Pro
  */
 export async function embedQuery(question: string): Promise<number[]> {
   const embeddings = await callEmbeddingAPI([question], 'query');
-  return embeddings[0];
+  if (!embeddings || embeddings.length === 0) {
+    throw new Error('Failed to generate embedding for query');
+  }
+  return embeddings[0]!;
 }
 
 /**

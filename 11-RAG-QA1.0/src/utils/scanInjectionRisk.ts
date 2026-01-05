@@ -28,7 +28,9 @@ export function scanInjectionRisk(texts: string[]): InjectionScanResult {
   const flaggedIndexes: number[] = [];
 
   for (let i = 0; i < texts.length; i++) {
-    const text = texts[i].toLowerCase();
+    const text = texts[i]?.toLowerCase();
+
+    if (!text) continue;
 
     // 检查是否包含任一关键词
     const hasKeyword = INJECTION_KEYWORDS.some(keyword =>

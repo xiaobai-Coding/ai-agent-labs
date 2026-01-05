@@ -9,8 +9,8 @@ export default defineConfig({
         target: "http://localhost:3000",
         changeOrigin: true,
         secure: false,
-        configure: (proxy, options) => {
-          proxy.on('error', (err, req, res) => {
+        configure: (proxy, _options) => {
+          proxy.on('error', (_err, _req, _res) => {
             console.log('API proxy error, please ensure Vercel dev server is running on port 3000');
             console.log('Run: npx vercel dev --port 3000');
           });
