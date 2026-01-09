@@ -32,6 +32,8 @@ ai-agent-labs/
 │    ├── trafficTimeTool.ts
 │    ├── packingListTool.ts
 │    ├── todoPlannerTool.ts
+│    ├── types.ts              # Common type definitions
+│    ├── index.ts              # Unified export entry
 │    └── README.md
 ├── 01-Chat-Calculator-Bot/
 ├── 02-Chat-UnitConverter/
@@ -58,6 +60,8 @@ ai-agent-labs/
 | trafficTimeTool | Traffic time (destination + weather) | `tools/trafficTimeTool.ts` |
 | packingListTool | Packing list (transport + weather) | `tools/packingListTool.ts` |
 | todoPlannerTool | Parse planned tasks into structured steps | `tools/todoPlannerTool.ts` |
+| types | Common type definitions | `tools/types.ts` |
+| index | Unified export entry | `tools/index.ts` |
 
 Full docs: [tools/README.md](./tools/README.md)
 
@@ -148,6 +152,7 @@ Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system execu
 - ✅ **One-click rollback**: Rollback with enhanced confirmation dialog showing impact details
 - ✅ **Two-way editing**: Left JSON Schema text editor + Right real-time form preview
 - ✅ **Field-level editor**: Click fields to edit configurations with real-time validation
+- ✅ **Manual edit tracking**: Manual field modifications automatically record to Patch History with version increment
 - ✅ **Schema import/export**: JSON file import/export with version compatibility
 - ✅ **State-aware UI**: Dynamic status hints and button text based on generation phases
 
@@ -173,6 +178,7 @@ Recommended path: 01→05 basics, 06 full scene, 07 workflow UI, 08 system execu
 - **Intent guard mechanisms** for preventing ambiguous AI actions
 - **Version drift protection** and schema consistency management
 - Advanced **patch history management** with standardized formatting
+- **Manual edit tracking** and automatic history recording
 - Complete **validation → preview → apply → history** engineering workflow
 
 📁 Path: `13-schema-builder-advanced/`
@@ -303,6 +309,8 @@ ai-agent-labs/
 | trafficTimeTool | 交通时间估算工具（基于目的地和天气） | `tools/trafficTimeTool.ts` |
 | packingListTool | 物品清单生成工具（基于交通方式和天气） | `tools/packingListTool.ts` |
 | todoPlannerTool | 任务规划拆解工具（将模型思考好的多条子任务文本解析为结构化待办 steps） | `tools/todoPlannerTool.ts` |
+| types | 公共类型定义 | `tools/types.ts` |
+| index | 统一导出入口 | `tools/index.ts` |
 
 工具会自动被 Agent 调用，用于真实执行能力，而不是让模型"猜"。
 
@@ -630,6 +638,7 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 - ✅ **一键回滚**：配备增强的确认对话框，显示影响详情
 - ✅ **双向编辑**：左侧 JSON Schema 文本编辑 + 右侧实时表单预览
 - ✅ **字段级编辑器**：点击字段进行配置编辑，支持实时校验
+- ✅ **手动编辑跟踪**：手动字段修改自动记录到 Patch History 并自动版本递增
 - ✅ **Schema 导入/导出**：JSON 文件导入导出，支持版本兼容性
 - ✅ **状态感知 UI**：基于生成阶段动态显示状态提示和按钮文案
 
@@ -655,6 +664,7 @@ Prompt 决策 → 工具执行 → 模型处理结果输出
 - 理解 **意图守卫机制** 防止模糊的 AI 操作
 - 探索 **版本漂移防护** 和 schema 一致性管理
 - 学习高级 **patch 历史管理** 配备标准化格式
+- 掌握 **手动编辑跟踪** 和自动历史记录机制
 - 掌握完整的 **校验 → 预览 → 应用 → 历史** 工程工作流
 
 📁 路径：`13-schema-builder-advanced/`
