@@ -151,11 +151,13 @@ function parseWithRefs(str: string): Segment[] {
     }
     // 解析引用编号：去除 # 号，分割逗号/顿号，转换为数字数组
     const ids = match[1]
-      .split(/[,，、]/)
-      .map((id) => id.trim().replace(/^#/, ""))
-      .filter(Boolean)
-      .map((id) => Number(id))
-      .filter((id) => !Number.isNaN(id));
+      ? match[1]
+          .split(/[,，、]/)
+          .map((id) => id.trim().replace(/^#/, ""))
+          .filter(Boolean)
+          .map((id) => Number(id))
+          .filter((id) => !Number.isNaN(id))
+      : [];
     if (ids.length) {
       segments.push({ type: "ref", ids: ids.map(String) });
     }

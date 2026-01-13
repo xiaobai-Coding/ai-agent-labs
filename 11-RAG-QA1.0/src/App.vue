@@ -25,6 +25,7 @@
     </section>
 
     <section class="layout" v-if="text">
+      <!-- AI 摘要 -->
       <div class="ui-card summary-card">
         <div class="card-header">
           <div class="dot purple"></div>
@@ -94,7 +95,7 @@
           上传完成后自动生成摘要…
         </div>
       </div>
-
+      <!-- 提取的文本内容 -->
       <div class="ui-card ui-card--dark text-card">
         <div class="card-header">
           <div class="dot blue"></div>
@@ -103,7 +104,7 @@
         </div>
         <TextViewer :chunks="chunks" :highlight-chunk-indices="highlightChunks" ref="textViewerRef" />
       </div>
-
+      <!-- 文档问答 -->
       <QASection v-if="chunks.length" :chunks="chunks" @scroll-to-chunks="scrollToChunks" />
     </section>
 
