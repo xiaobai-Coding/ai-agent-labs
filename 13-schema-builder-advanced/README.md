@@ -1,11 +1,10 @@
-# AI Schema Builder
+# AI Schema Builder (Advanced)
 
 [中文版本入口](#zh-readme)
 
-An AI-powered JSON Schema form builder that transforms natural language into **editable, incremental, and production-ready schemas**.
+An engineering-oriented AI-powered JSON Schema form builder that transforms natural language into **production-ready, incremental, and validated schemas**.
 
-AI Schema Builder is **not** a one-shot AI demo.  
-It is an **engineering-oriented AI system** that demonstrates how to integrate LLMs into real front-end workflows with **control, validation, patching, rollback, and cost protection**.
+AI Schema Builder (Advanced) is **not** a one-shot AI demo. It is a robust **engineering-oriented AI system** designed to demonstrate how to integrate LLMs into real-world front-end workflows with **strict control, multi-layer validation, incremental patching, and cost protection**.
 
 👉 Live Demo: https://ai-schema-builder-advanced.vercel.app
 
@@ -13,675 +12,308 @@ It is an **engineering-oriented AI system** that demonstrates how to integrate L
 
 ## 🌍 English Version
 
-### Why This Project Exists
+### 📖 Introduction
+
+In the era of AI-driven development, most "Form Builders" focus on one-shot generation. However, real-world requirements are **iterative**. A user might say "add a phone field" or "make this field required" after the initial generation. 
+
+**AI Schema Builder (Advanced)** solves this by treating AI as a "proposer" of changes (Patches) rather than a simple code generator. It implements a sophisticated workflow that ensures AI-generated modifications are safe, version-aware, and human-verified before being applied to the "Source of Truth" (the Schema).
+
+### ❓ Why This Project Exists
+
+Most AI form builders stop at "Generate once," "Screenshot and done," or "Regenerate everything on every change." These approaches fail in real usage because:
+- **Regeneration causes state loss**: Custom manual edits are wiped out.
+- **High cost**: Sending full schemas to LLMs for small changes is wasteful.
+- **Lack of control**: Blindly applying AI output can break production UIs.
+
+**90% of AI demos break when a user says "I only want to modify this one field."** This project is designed to solve that exact problem.
+
+### 🛠 Core Capabilities
+
+#### 1. Natural Language → JSON Schema (Controlled Generation)
+- Users describe form requirements in plain language.
+- AI generates **strictly structured JSON Schema**.
+- Output is machine-parseable and validated before application.
+
+#### 2. Schema-Driven Form Rendering
+- JSON Schema is the **single source of truth**.
+- Forms are rendered dynamically from `schema.fields`.
+- Supported field types: `string`, `number`, `boolean`, `select (enum)`.
+
+#### 3. Two-Way Editable Schema with Safety Guards
+- **Live Form Preview**: Instant feedback as the schema changes in the raw JSON editor.
+- **Validation-First**: Invalid JSON never breaks the UI; the last valid state is always preserved.
+
+#### 4. Field-Level Editor (Human-in-the-Loop)
+- Click any field to open a drawer editor for labels, descriptions, required status, defaults, and enum options.
+- Supports immediate apply, cancel/rollback, and single-field reset.
+
+#### 5. Schema Import / Export (Closed Loop)
+- **Export**: Copy JSON or download as `.json`.
+- **Import**: Paste JSON or upload files with strict validation guards.
+
+#### 6. AI Patch System (Core Highlight)
+- **Intent Classification**: Before generation, AI classifies user intent as `FULL_GENERATE`, `PATCH_UPDATE`, `REGENERATE`, or `UNKNOWN`. This prevents accidental full rewrites.
+- **Incremental Updates**: For `PATCH_UPDATE`, AI returns **only patch operations** (`add`, `update`, `remove`), saving tokens and preserving manual edits.
+- **Patch Preview & Diff**: A semantic summary and raw operations are presented for explicit confirmation.
+- **History & Rollback**: Stores history records with snapshots for one-click recovery.
+
+### 🔄 System Workflow
+
+The system follows a rigorous "Reasoning -> Validation -> Execution" pipeline:
+
+1.  **Input & Guard**: Receives user input. Detects vague requests (e.g., "optimize it") and clarifies if needed.
+2.  **Classification**: AI determines the intent (e.g., `PATCH_UPDATE`).
+3.  **Patch Generation**: AI generates a list of operations based on current schema and instructions.
+4.  **Local Validation**: System validates operations (field existence, type safety, version consistency).
+5.  **Confirmation**: Semantic summary and diff are presented to the user.
+6.  **Application**: Valid operations applied; version increments; history saved.
+
+### 🏗 Engineering Hard Cases
+
+These are real-world failure modes where most AI demos collapse. AI Schema Builder (Advanced) handles them with system-level guards.
+
+#### 1) Patch Drift / Version Mismatch (Schema Drift)
+- **Problem**: User edits schema manually while AI is generating a patch.
+- **Solution**: Schema maintains `version`. Patch returns `baseVersion`. If mismatch, the update is blocked to prevent state corruption.
+
+#### 2) Partial Apply (Some operations invalid)
+- **Problem**: Some operations in a patch are invalid (e.g., update a non-existent field).
+- **Solution**: Validate operations independently. Mark valid ones for application and skip invalid ones with clear reasons.
+
+#### 3) Intent Misclassification Fallback
+- **Problem**: Classifier may output `PATCH_UPDATE` but with low confidence.
+- **Solution**: Intent + confidence gating. If below threshold, show a clarify UI asking: “Do you want to regenerate from scratch, or apply a patch?”
+
+### 📂 Project Directory Structure
+
+```text
+.
+├── api/                    # Serverless Functions (Vercel)
+│   └── ai.ts               # AI Proxy with rate limiting & security
+├── src/
+│   ├── components/         # UI Components
+│   │   ├── form-renderer/  # Dynamic form rendering logic
+│   │   ├── PatchPreview/   # Diff & confirmation UI
+│   │   └── ...
+│   ├── prompts/            # AI Prompts (Classification & Patching)
+│   ├── services/           # Backend communication
+│   ├── types/              # Type definitions (Schema, Intent)
+│   ├── utils/              # Core Logic
+│   │   ├── applyPatch.ts   # JSON Patch execution engine
+│   │   ├── validatePatch.ts# Multi-layer safety validation
+│   │   ├── intentGuard.ts  # Input sanity & confidence checks
+│   │   └── patchSummary.ts # Semantic diff generator
+│   └── App.vue             # Main Application Logic
+└── README.md
+```
+
+### 🔒 Security & Deployment
+
+#### Serverless API Layer (Vercel)
+All AI requests go through `/api/ai` to ensure:
+- **API Keys** stay server-side.
+- **Rate Limiting** via Vercel KV (Redis) to prevent cost abuse.
+- **Client Token Validation** to block direct script access.
 
-Most AI form builders stop at:
+### � Architecture Philosophy
 
-- “Generate once”
-- “Screenshot and done”
-- “Regenerate everything on every change”
+- **Schema as Single Source of Truth**: AI and UI both sync to the same state.
+- **AI Proposes, System Validates**: AI is for reasoning; the system is for execution and safety.
+- **Validation-First, Human-in-the-Loop**: Never trust AI output blindly.
+- **Patch-based Evolution**: Incremental changes are superior to full regeneration.
 
-These approaches fail in real usage.
-
-Real users say things like:
-
-- “Add a phone field”
-- “Make this required”
-- “Undo the last change”
-- “I only want to modify this one field”
-
-**90% of AI demos break here.**
-
-AI Schema Builder is designed to solve this exact problem.
-
----
-
-## Core Capabilities
-
-### 1. Natural Language → JSON Schema (Controlled Generation)
-
-- Users describe form requirements in plain language
-- AI generates **strictly structured JSON Schema**
-- Output is machine-parseable and validated before application
-
----
-
-### 2. Schema-Driven Form Rendering
-
-- JSON Schema is the **single source of truth**
-- Forms are rendered dynamically from `schema.fields`
-- Supported field types:
-  - `string`
-  - `number`
-  - `boolean`
-  - `select (enum)`
-
----
-
-### 3. Two-Way Editable Schema with Safety Guards
-
-- Left panel: raw JSON schema editor
-- Right panel: live form preview
-- Validation-first workflow:
-  - Invalid JSON never breaks the UI
-  - The last valid schema is always preserved
-
----
-
-### 4. Field-Level Editor (Human-in-the-Loop)
-
-- Click any field to open a drawer editor
-- Edit:
-  - label
-  - description
-  - required
-  - default
-  - enum options
-  - type-specific constraints
-- Supports:
-  - apply immediately
-  - cancel & rollback
-  - reset single field
-
----
-
-### 5. Schema Import / Export (Closed Loop)
-
-- Export schema:
-  - copy JSON
-  - download `.json`
-- Import schema:
-  - paste JSON
-  - upload `.json`
-- Invalid schema never overwrites the current valid state
-
----
-
-## AI Patch System (Core Highlight)
-
-### Intent Classification
-
-Before generation, AI classifies user intent as:
-
-- `FULL_GENERATE`
-- `PATCH_UPDATE`
-- `REGENERATE`
-- `UNKNOWN`
-
-This prevents accidental full rewrites.
-
----
-
-### Incremental Patch Updates
-
-For `PATCH_UPDATE`:
-
-- AI receives:
-  - `current_schema`
-  - `user_instruction`
-- AI returns **only patch operations**, never full schema dumps:
-  - `add`
-  - `update`
-  - `remove`
-
----
-
-### Patch Preview & Diff
-
-- Preview modal shows:
-  - semantic change summary
-  - raw patch operations
-- Changes apply **only after explicit confirmation**
-
----
-
-### Patch History & Rollback
-
-- Stores last N applied patches
-- Each entry includes:
-  - human-readable summary
-  - before/after schema snapshots
-- One-click rollback without creating new history entries
-
----
-
-## Engineering Hard Cases (Week 2)
-
-These are the real-world failure modes where most AI demos collapse.  
-This project explicitly handles them with **system-level guards**.
-
-### 1) Patch Drift / Version Mismatch (Schema Drift)
-
-Problem:
-- AI generates a patch based on `schema@v1`
-- User edits schema to `schema@v2` before patch is applied
-- Applying a `v1` patch onto `v2` can corrupt state
-
-Solution:
-- `schema` maintains `version` (or hash)
-- Patch returns `baseVersion`
-- Before apply:
-  - if `baseVersion !== currentVersion` → block apply and ask user to regenerate patch
-
-### 2) Partial Apply (Some operations invalid)
-
-Problem:
-- Patch contains multiple operations
-- Some are valid, some are invalid (e.g., update a non-existent field)
-
-Solution:
-- Validate each operation independently
-- In preview:
-  - mark ✔ valid operations
-  - mark ✖ skipped operations with reasons
-- Apply strategy: **skip invalid ops, apply the rest**
-- Produce a clear final summary:
-  - “Applied 2, skipped 1 (field not found: email)”
-
-### 3) Patch Validation Enhancement (Never trust AI output)
-
-Problem:
-- AI output may include invalid field types, illegal keys, or inconsistent values
-
-Solution:
-- Strict patch validation before apply:
-  - op / target must be in allowed set
-  - field must exist for update/remove
-  - type must be one of `string | number | boolean | select`
-  - enum must be compatible with `select`
-- Invalid patch never mutates schema
-
-### 4) Intent Misclassification Fallback (intent + confidence)
-
-Problem:
-- Classifier may output `PATCH_UPDATE` but with low confidence
-- Blind execution causes wrong behavior
-
-Solution:
-- intent + confidence gating:
-  - if `PATCH_UPDATE` and `confidence < threshold` → do NOT execute
-  - show clarify UI:
-    - “Do you want to regenerate from scratch, or apply a patch?”
-
----
-
-## Security & Deployment (Engineering Reality)
-
-### Why Frontend Direct AI Calls Are Dangerous
-
-- API keys exposed in browser
-- Requests can be replayed or scripted
-- Unlimited cost risk
-
-**Frontend ≠ Security boundary**
-
----
-
-### Serverless API Layer (Vercel)
-
-All AI requests go through `/api/ai`:
-
-Client → Vercel Serverless API → AI Provider
-
-Benefits:
-
-- API keys stay server-side
-- Request validation & sanitization
-- Centralized error handling
-- Rate limiting & cost protection
-
----
-
-### Cost Protection & Abuse Prevention
-
-Implemented strategies:
-
-- All AI requests go through `/api/ai`
-- API keys are server-side only
-- IP-based rate limiting using Vercel KV (Redis)
-- Client token validation to prevent direct script access
-- Input validation and unified error responses
-
----
-
-## Architecture Philosophy
-
-- **Schema as Single Source of Truth**
-- **AI proposes, system validates and applies**
-- Validation-first, human-in-the-loop
-- Patch-based evolution over full regeneration
-- Clear separation of responsibilities:
-  - AI = reasoning & suggestion
-  - System = execution, validation, and safety
-
----
-
-## Tech Stack
-
-- Vue 3 + TypeScript
-- Naive UI
-- Vite
-- DeepSeek (OpenAI-style API)
-- Vercel Serverless Functions
-- Vercel KV (Redis)
-
----
-
-## Project Value
+### �💎 Project Value
 
 This project demonstrates:
+- How to build **engineering-grade AI tools**.
+- How to safely integrate LLMs into real applications with **state control**.
+- How to handle real-world AI hard cases (drift, partial apply, misclassification).
+- **Cost protection** and production instability prevention.
 
-- How to build **engineering-grade AI tools**
-- How to safely integrate LLMs into real applications
-- How to control AI-generated state changes
-- How to prevent cost abuse and production instability
-- How to handle real-world AI hard cases (drift, partial apply, misclassification)
+### 🚀 Local Development
 
-Suitable for:
-
-- AI + Frontend engineering demos
-- Agent system design examples
-- Technical interviews and showcases
-
----
-
-## Local Development
-
-```
-### 1) Install dependencies
-
+#### 1) Install dependencies
 ```bash
-pnpm install
-# or
 npm install
+# or
+pnpm install
 ```
 
-### **2) Set environment variables (required)**
-
-Before starting local development, you must manually set the following environment variables (required by /api/ai):
-
-```
+#### 2) Set environment variables (Required)
+```bash
 export AI_API_KEY="your_api_key_here"
 export AI_API_BASE_URL="https://api.deepseek.com"
 export CLIENT_TOKEN="ai-schema-builder-web"
 ```
 
-Tip: you can also put them into your shell profile (e.g. ~/.zshrc) for convenience.
-
-### **3) Start local server (Vercel Dev)**
-
-```
+#### 3) Start local server (Vercel Dev)
+```bash
 vercel dev
 ```
+Open [http://localhost:3000](http://localhost:3000)
 
-Then open:
+---
 
-- http://localhost:3000
+## 👨‍💻 Author
+**xiaoBaiCoding**
 
+Frontend Engineer → AI Application Engineer (Transforming).  
+Focusing on LLM applications, Agent systems, and AI front-end engineering practices.
 
+---
 
-------
+## <a id="zh-readme"></a>
+## 🇨🇳 中文版本
 
+### 📖 项目介绍
 
-# <a id="zh-readme"></a>
-# **🇨🇳 中文版说明**
+在 AI 驱动开发的时代，大多数“表单生成器”只关注一次性生成。然而，真实业务需求是**增量演进**的。用户往往在初始生成后提出“加个手机号字段”或“把这个设为必填”等修改。
 
+**AI Schema Builder (Advanced)** 正是为了解决这一痛点而生。它将 AI 视为变更的“提案者”（Patch Proposer），而非简单的代码生成器。通过一套严谨的工作流，确保 AI 生成的修改在应用到“唯一事实源”（Schema）之前，是安全、感知版本且经过人工确认的。
 
+### ❓ 项目背景
 
-## **项目背景**
+大多数 AI 表单 Demo 只能做到“一次性生成”、“截图即结束”或“每次修改就全量重写”。这种方式在真实场景中会失败：
+- **重写导致状态丢失**：用户的手动微调会被 AI 覆盖。
+- **高昂成本**：为了一点小改动就发送全量 Schema 给模型非常浪费。
+- **缺乏控制**：盲目应用 AI 输出可能破坏生产环境界面。
 
+**当用户说“我只想改这一项”时，90% 的 AI Demo 都会崩溃。** 本项目正是为了解决这些工程级问题。
 
+### 🛠 核心能力
 
-大多数 AI 表单 Demo 只能做到：
+#### 1. 自然语言 → JSON Schema（受控生成）
+- 用户使用自然语言描述需求。
+- AI 输出严格结构化的 **JSON Schema**。
+- 在应用前进行机器解析与合法性校验。
 
-- 一次性生成
-- 每次修改就全量重写
-- 无法撤销、无法回滚
-- 没有成本控制
+#### 2. Schema 驱动的表单渲染
+- JSON Schema 是系统的**唯一事实源**。
+- 表单完全由 `schema.fields` 动态渲染。
+- 支持 `string`, `number`, `boolean`, `select` 等字段类型。
 
-但真实用户会说：
+#### 3. Schema 双向可编辑 + 安全兜底
+- **实时预览**：在 JSON 编辑区修改 Schema，右侧表单即刻看到效果。
+- **校验优先**：非法 JSON 不会破坏界面，始终保留最近一次合法状态。
 
-- “加一个手机号字段”
-- “这个字段改成必填”
-- “刚才那步不对，撤回”
-- “我只想改这一项”
+#### 4. 字段级编辑器（人类参与）
+- 点击字段打开抽屉，编辑 label、描述、必填、默认值及枚举项。
+- 支持即时生效、取消回滚及单字段重置。
 
-**90% 的 AI Demo 就死在这里。**
+#### 5. Schema 导入 / 导出（闭环）
+- **导出**：复制 JSON 或下载 `.json` 文件。
+- **导入**：粘贴 JSON 或上传文件，带严格校验。
 
-AI Schema Builder 正是为了解决这个工程级问题。
+#### 6. AI Patch 机制（核心亮点）
+- **意图识别**：在生成前判断是“全量生成”、“增量修改”、“推翻重做”还是“无法识别”。避免误触发全量重写。
+- **增量更新**：对于增量修改，AI 仅返回 **Patch 操作**（add, update, remove），节省 Token 并保护手动编辑。
+- **预览与 Diff**：展示语义化摘要和原始操作，由用户显式确认。
+- **历史与回滚**：记录变更快照，支持一键恢复到历史状态。
 
-------
+### 🔄 系统工作流程
 
+系统遵循严格的“推理 -> 校验 -> 执行”管线：
 
+1.  **输入与守护**：接收用户输入。识别模糊指令（如“优化一下”）并在必要时请求澄清。
+2.  **分类**：AI 判定意图（如 `PATCH_UPDATE`）。
+3.  **补丁生成**：AI 接收当前 Schema 和指令，生成操作列表。
+4.  **本地校验**：系统逐条校验操作（字段存在性、类型安全、版本一致性）。
+5.  **确认**：向用户展示语义化摘要和 Diff 预览。
+6.  **执行**：应用合法操作，版本递增，记录历史。
 
-## **核心能力**
+### 🏗 工程级 Hard Case 处理
 
+这些是真实工程中最容易导致 AI 系统崩溃的场景，本项目通过系统级兜底予以解决：
 
+#### 1) Patch 漂移 / 版本不一致（Schema Drift）
+- **问题**：AI 生成补丁期间，用户手动修改了 Schema。
+- **方案**：Schema 维护 `version`，Patch 携带 `baseVersion`。若不一致则拦截更新，防止状态污染。
 
-### **1. 自然语言 → JSON Schema（受控生成）**
+#### 2) 部分成功 (Partial Apply)
+- **问题**：补丁中部分操作非法（如更新一个不存在的字段）。
+- **方案**：独立校验每条操作。应用合法部分，跳过非法部分并给出详细原因。
 
-- 使用自然语言描述表单需求
-- AI 输出结构化 JSON Schema
-- 在进入系统前进行严格校验，防止污染状态
+#### 3) 意图误判兜底
+- **问题**：分类器可能输出 `PATCH_UPDATE` 但置信度低。
+- **方案**：意图 + 置信度联合判断。低于阈值时弹出澄清 UI，询问：“你是想重新生成？还是基于当前表单做增量修改？”
 
-------
+### 📂 项目目录说明
 
-
-
-### **2. Schema 驱动的表单渲染**
-
-- JSON Schema 是唯一事实源
-- 表单完全由 schema.fields 动态渲染
-- 支持字段类型：
-  - 文本（string）
-  - 数字（number）
-  - 布尔（boolean）
-  - 下拉选择（enum）
-
-------
-
-
-
-### **3. Schema 双向可编辑 + 安全兜底**
-
-- 左侧：JSON 编辑区
-- 右侧：表单实时预览
-- 校验优先机制：
-  - 非法 JSON 不会破坏界面
-  - 始终保留最近一次合法 Schema
-
-------
-
-
-
-### **4. 字段级编辑器（人类参与）**
-
-- 点击字段打开编辑抽屉
-- 可编辑：
-  - label / 描述 / 必填
-  - 默认值 / 枚举 / 类型约束
-- 支持：
-  - 即时生效
-  - 取消回滚
-  - 单字段重置
-
-------
-
-
-
-### **5. Schema 导入 / 导出（闭环）**
-
-- 导出：
-  - 复制 JSON
-  - 下载 .json
-- 导入：
-  - 粘贴 JSON
-  - 上传 .json
-- 校验失败不会覆盖当前合法 Schema
-
-------
-
-
-
-## **AI Patch 机制（核心亮点）**
-
-### **意图识别**
-
-在生成前判断用户意图：
-
-- FULL_GENERATE（全量生成）
-- PATCH_UPDATE（增量修改）
-- REGENERATE（重新生成）
-- UNKNOWN（无法识别）
-
-避免误触发全量重写。
-
-------
-
-
-
-### **增量 Patch 更新**
-
-- AI 接收：
-  - 当前 Schema（current_schema）
-  - 用户修改描述（user_instruction）
-- 只返回 Patch 操作：
-  - 新增（add）
-  - 修改（update）
-  - 删除（remove）
-- 不允许返回完整 Schema
-
-------
-
-
-
-### **Patch 预览与 Diff**
-
-- 应用前展示：
-  - 变更摘要
-  - Patch 操作列表
-- 用户确认后才真正修改 Schema
-
-------
-
-
-
-### **Patch 历史与回滚**
-
-- 记录最近 N 次 Patch
-- 每条包含：
-  - 可读摘要
-  - 前后 Schema 快照
-- 一键回滚，不生成新历史
-
-------
-
-
-
-## **工程级 Hard Case 处理**
-
-这些是真实工程里最容易出事故的点，也是多数 AI Demo 走不下去的原因。
-
-本项目通过系统级兜底把它们补齐。
-
-### **1) Patch 漂移 / 版本不一致（Schema Drift）**
-
-**问题：**
-
-- AI 基于 schema@v1 生成 Patch
-- Patch 返回前，用户把 schema 改成 schema@v2
-- 把 v1 Patch 应用到 v2 会导致状态污染
-
-**方案：**
-
-- schema 维护 version（或 hash）
-- Patch 返回 baseVersion
-- apply 前校验：
-  - baseVersion !== currentVersion → 阻止应用，并提示重新生成 Patch
-
-------
-
-
-
-### **2) 部分失败（Partial Apply）**
-
-**问题：**
-
-- Patch 里包含多条操作
-- 有的合法，有的非法（例如更新一个不存在的字段）
-
-**方案：**
-
-- 每条 operation 独立校验
-- Preview 中标记：
-  - ✔ 可应用
-  - ✖ 跳过（并展示原因）
-- 应用策略：跳过非法，应用其余合法操作
-- 最终给出清晰摘要：
-  - “成功应用 2 条，跳过 1 条（字段不存在：email）”
-
-------
-
-
-
-### **3) Patch 校验增强（AI 输出 ≠ 可信数据）**
-
-**问题：**
-
-- AI 可能输出非法 type、非法字段属性、enum 不匹配等
-
-**方案：**
-
-- apply 前严格校验：
-  - op / target 必须在白名单
-  - update/remove 必须命中字段
-  - type 必须属于 string | number | boolean | select
-  - enum 必须与 select 兼容
-- 非法 patch 不允许污染 schema
-
-------
-
-
-
-### **4) 意图误判兜底（intent + confidence）**
-
-**问题：**
-
-- 分类器可能输出 PATCH_UPDATE 但置信度低
-- 盲执行会触发错误路径
-
-**方案：**
-
-- intent + confidence 联合判断：
-  - PATCH_UPDATE 且 confidence < 阈值 → 不执行
-- 弹出澄清 UI：
-  - “你是想重新生成？还是基于当前表单做增量修改？”
-
-------
-
-
-
-## **安全与部署（真实工程场景）**
-
-### **为什么不能前端直连 AI**
-
-- API Key 暴露在浏览器中
-- 请求可被脚本模拟
-- 极易被刷量，产生真实资金损失
-
-------
-
-
-
-### **Serverless API 执行层（Vercel）**
-
-**请求链路：**
-
-- 前端 → Vercel Serverless API → AI 模型
-
-**优势：**
-
-- Key 永不暴露
-- 请求统一校验
-- 集中限流与错误处理
-- 成本与安全可控
-
-------
-
-
-
-### **成本与防刷策略**
-
-已实现：
-
-- 所有 AI 请求统一走 /api/ai
-- API Key 仅存在于服务端
-- 基于 IP 的限流（Vercel KV / Redis）
-- 客户端 Token 校验，防止脚本直刷
-- 标准化错误返回，避免异常状态扩散
-
-------
-
-
-
-## **设计理念**
-
-- Schema 是唯一事实源
-- AI 负责“想”，系统负责“执行”
-- 所有修改：
-  - 可验证
-  - 可预览
-  - 可追溯
-  - 可回退
-- 以增量演进代替全量重写
-
-------
-
-
-
-## **项目意义**
-
-展示如何把 AI 真正变成工程系统的一部分，而不是一次性的 Demo。
-
-适用于：
-
-- AI + 前端工程实践
-- Agent 系统设计展示
-- 面试 / 技术分享项目
-
-------
-
-
-
-## **本地开发**
-
-### **1）安装依赖**
-
+```text
+.
+├── api/                    # Serverless 云函数 (Vercel)
+│   └── ai.ts               # AI 代理：集成限流与 API 安全校验
+├── src/
+│   ├── components/         # UI 组件
+│   │   ├── form-renderer/  # 动态表单渲染核心逻辑
+│   │   ├── PatchPreview/   # 补丁预览与确认 UI
+│   │   └── ...
+│   ├── prompts/            # AI 提示词（分类与补丁生成模板）
+│   ├── services/           # 后端接口服务
+│   ├── types/              # 类型定义（Schema、意图等）
+│   ├── utils/              # 核心工具函数（系统大脑）
+│   │   ├── applyPatch.ts   # JSON Patch 执行引擎
+│   │   ├── validatePatch.ts# 多层安全校验逻辑
+│   │   ├── intentGuard.ts  # 输入清洗与置信度拦截
+│   │   └── patchSummary.ts # 语义化变更摘要生成
+│   └── App.vue             # 应用主入口与状态管理
+└── README.md
 ```
-pnpm install
-# or
+
+### 🔒 安全与部署
+
+#### Serverless API 执行层 (Vercel)
+所有 AI 请求统一走 `/api/ai`：
+- **API Key** 永不暴露给前端。
+- **频率限制**：基于 Vercel KV (Redis) 实现 IP 限流。
+- **令牌校验**：防止脚本直刷接口。
+
+### 📐 设计理念
+
+- **Schema 是唯一事实源**：AI 与 UI 始终同步于同一状态。
+- **AI 负责“建议”，系统负责“执行”**：AI 提供推理，系统负责安全与落地。
+- **校验优先，人类参与**：绝不盲目信任 AI 输出。
+- **以增量演进代替全量重写**：保护用户心智与 Token 成本。
+
+### 💎 项目价值
+
+展示如何把 AI 真正变成工程系统的一部分：
+- 如何构建 **工程级 AI 工具**。
+- 如何在实际应用中安全集成 LLM 并保持 **状态可控**。
+- 如何处理真实的 AI Hard Cases（漂移、部分应用、误判）。
+- **成本保护**与生产稳定性防护。
+
+### 🚀 本地开发
+
+#### 1）安装依赖
+```bash
 npm install
+# 或
+pnpm install
 ```
 
-### **2）设置环境变量（必须）**
-
-在本地启动前，你必须手动设置以下环境变量（/api/ai 依赖它们）：
-
-```
+#### 2）设置环境变量（必须）
+```bash
 export AI_API_KEY="你的_api_key"
 export AI_API_BASE_URL="https://api.deepseek.com"
 export CLIENT_TOKEN="ai-schema-builder-web"
 ```
 
-### **3）启动本地服务（Vercel Dev）**
-
-```
+#### 3）启动本地服务 (Vercel Dev)
+```bash
 vercel dev
 ```
+访问 [http://localhost:3000](http://localhost:3000)
 
-打开：
+---
 
-
-
-- http://localhost:3000
-
-------
-
-
-
-## **👨‍💻 作者**
-
+## 👨‍💻 作者
 **xiaoBaiCoding**
 
-前端工程师 → AI 应用工程师（转型中）
+前端工程师 → AI 应用工程师（转型中）。  
+专注于 LLM 应用、Agent 系统与 AI 前端工程化实践。
 
-专注于 LLM 应用、Agent 系统与 AI 工程实践
+---
 
-------
-
-
-
-## **License**
-
+## License
 MIT License
-
