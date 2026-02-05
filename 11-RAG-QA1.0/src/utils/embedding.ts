@@ -1,48 +1,75 @@
 /**
- * DeepSeek embedding helper
+ * Embedding helper - 调用本地 /api/embedding 服务
  * - embedQuery: 单条查询文本向量化
  * - embedChunks: 批量片段向量化
  *
  * 注意：
- * 1. 不做归一化，保持模型原有数量级
- * 2. 对空文本做防御处理
- * 3. 调用 deepseek-embedding 接口
+ * 1. 通过本地API调用DashScope Embedding服务
+ * 2. 支持注入风险检测
+ * 3. 统一错误处理
  */
 
-const ALI_API_KEY = import.meta.env.VITE_ALI_API_KEY || "";
-const MODEL = "text-embedding-v4"; // 模型名称
+interface EmbeddingResponse {
+  status: 'ok' | 'error';
+  data?: { embeddings: number[][] };
+  meta?: {
+    provider: string;
+    model: string;
+    hasInjectionRisk: boolean;
+    flaggedIndexes: number[];
+    requestId: string;
+  };
+  code?: string;
+  message?: string;
+}
 
-// 使用 阿里云的 DashScope 进行向量化
-async function getAliEmbedding(text: string) {
-  const response = await fetch("/ali-embed/compatible-mode/v1/embeddings", {
-    method: "POST",
+/**
+ * 调用本地 embedding API
+ */
+async function callEmbeddingAPI(texts: string[], purpose?: 'query' | 'doc'): Promise<number[][]> {
+  const response = await fetch('/api/embedding', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${ALI_API_KEY}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: MODEL,
-      input: text
+      texts,
+      purpose
     })
   });
 
   if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Ali Embedding failed: ${err}`);
+    // 尝试解析错误响应
+    let errorMessage = '网络请求失败';
+    try {
+      const errorData: EmbeddingResponse = await response.json();
+      if (errorData.status === 'error' && errorData.message) {
+        errorMessage = errorData.message;
+      }
+    } catch (e) {
+      // 解析失败，使用默认错误信息
+    }
+    throw new Error(errorMessage);
   }
 
-  const json = await response.json();
-  if (json.data?.[0]?.embedding && Array.isArray(json.data[0].embedding)) {
-    return json.data[0].embedding;
+  const data: EmbeddingResponse = await response.json();
+
+  if (data.status !== 'ok' || !data.data?.embeddings) {
+    throw new Error('API响应格式错误');
   }
-  throw new Error(`Ali Embedding failed: ${json.error.message}`);
+
+  return data.data.embeddings;
 }
 
 /**
  * 对用户查询生成 embedding
  */
 export async function embedQuery(question: string): Promise<number[]> {
-  return getAliEmbedding(question);
+  const embeddings = await callEmbeddingAPI([question], 'query');
+  if (!embeddings || embeddings.length === 0) {
+    throw new Error('Failed to generate embedding for query');
+  }
+  return embeddings[0]!;
 }
 
 /**
@@ -50,11 +77,7 @@ export async function embedQuery(question: string): Promise<number[]> {
  */
 export async function embedChunks(chunks: string[]): Promise<number[][]> {
   if (!Array.isArray(chunks) || !chunks.length) return [];
-  // 顺序执行以避免过快并发触发限流；如需更快可改为 Promise.all
-  const results: number[][] = [];
-  for (const chunk of chunks) {
-    const emb = await getAliEmbedding(chunk);
-    results.push(emb);
-  }
-  return results;
+
+  // 直接批量调用API，更高效
+  return callEmbeddingAPI(chunks, 'doc');
 }

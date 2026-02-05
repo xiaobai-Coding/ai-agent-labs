@@ -5,7 +5,7 @@
  * @param b 向量b
  * @returns 余弦相似度
  */
-export function cosineSimilarity(a: number[], b: number[]): number {
+export function cosineSimilarity(a: number[] | undefined, b: number[] | undefined): number {
   if (!Array.isArray(a) || !Array.isArray(b) || !a.length || !b.length) return 0;
   if (a.length !== b.length) throw new Error("Vector dimension mismatch in cosineSimilarity.");
 
